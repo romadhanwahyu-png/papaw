@@ -411,8 +411,8 @@ export async function getTodaySummary(profileId: string): Promise<TodaySummary> 
     .eq('profile_id', profileId)
     .gte('started_at', todayStart.toISOString());
 
-  const sessionList = sessions || [];
-  const sessionIds = sessionList.map(s => s.id);
+  const sessionList = (sessions || []) as Session[];
+  const sessionIds = sessionList.map((s: Session) => s.id);
 
   // Get today's messages
   let messageCount = 0;
@@ -483,7 +483,7 @@ export async function getWeekSummary(profileId: string): Promise<WeekSummary> {
 
   // Daily activity
   const dailyMap: Record<string, number> = {};
-  const sessionIds = sessionList.map(s => s.id);
+  const sessionIds = (sessionList || []) as Session[] ? ((sessionList || []) as Session[]).map((s: Session) => s.id) : [];
   
   let trendingTopics: string[] = [];
 
@@ -514,7 +514,7 @@ export async function getWeekSummary(profileId: string): Promise<WeekSummary> {
   }
 
   // Calculate streak
-  const activeDates = new Set(sessionList.map(s => 
+  const activeDates = new Set(((sessionList || []) as Session[]).map((s: Session) => 
     new Date(s.started_at).toISOString().split('T')[0]
   ));
   let streak = 0;
@@ -554,7 +554,7 @@ export async function getChatHistory(
 
   if (!sessions || sessions.length === 0) return [];
 
-  const sessionIds = sessions.map(s => s.id);
+  const sessionIds = (sessions as Session[]).map((s: Session) => s.id);
   const offset = (page - 1) * limit;
 
   const { data, error } = await supabaseServer
