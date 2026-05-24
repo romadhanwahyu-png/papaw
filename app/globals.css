@@ -1,26 +1,286 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/* ============================================================
+   Papaw — Design System (Tailwind v4)
+   ============================================================ */
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* --- Core Palette --- */
+  --color-indigo-night: #1a1b3a;
+  --color-indigo-deep: #141528;
+  --color-papaw-bg: #0f1129;
+  --color-papaw-surface: #1e2048;
+  --color-papaw-surface-hover: #272956;
+  --color-papaw-card: #232550;
+  --color-papaw-card-hover: #2c2e62;
+  --color-papaw-border: #2e305a;
+  --color-warm-amber: #ff9f1c;
+  --color-warm-amber-soft: #ffb03a;
+  --color-warm-amber-dim: #e65100;
+  --color-warm-orange: #ff7d3b;
+  --color-warm-cream: #fffaec;
+  --color-warm-white: #faf8f5;
+  --color-warm-gray: #a1a1aa;
+  --color-warm-gray-light: #e4e4e7;
+  --color-soft-pink: #f9a8d4;
+  --color-soft-green: #86efac;
+  --color-soft-blue: #93c5fd;
+  --color-soft-purple: #c4b5fd;
+  --color-soft-red: #fca5a5;
+  --color-critical-red: #ef4444;
+  --color-success-green: #22c55e;
+
+  /* --- Text Colors --- */
+  --color-text-primary: #faf8f5;
+  --color-text-secondary: #eae6ff;
+  --color-text-muted: #aba7cc;
+  --color-text-amber: #ffca28;
+
+  /* --- Chat Bubble Colors --- */
+  --color-bubble-child: #2e305a;
+  --color-bubble-papaw: #1e2048;
+  --color-bubble-papaw-border: #3b3d6e;
+
+  /* --- Font Family --- */
+  --font-sans: "Nunito", ui-sans-serif, system-ui, sans-serif;
+
+  /* --- Animations --- */
+  --animate-fade-in: fadeIn 0.4s ease-out forwards;
+  --animate-fade-in-up: fadeInUp 0.5s ease-out forwards;
+  --animate-slide-up: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  --animate-slide-down: slideDown 0.3s ease-out forwards;
+  --animate-slide-in-right: slideInRight 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  --animate-breathing: breathing 3s ease-in-out infinite;
+  --animate-float: float 6s ease-in-out infinite;
+  --animate-twinkle: twinkle 3s ease-in-out infinite;
+  --animate-bounce-dots: bounceDots 1.4s ease-in-out infinite;
+  --animate-pulse-soft: pulseSoft 2s ease-in-out infinite;
+  --animate-scale-in: scaleIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  --animate-wiggle: wiggle 0.5s ease-in-out;
+  --animate-celebrate: celebrate 0.6s cubic-bezier(0.36, 0.07, 0.19, 0.97) forwards;
+  --animate-spin-slow: spin 8s linear infinite;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* ============================================================
+   Keyframes
+   ============================================================ */
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(40px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(30px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes breathing {
+  0%, 100% { transform: scale(1); opacity: 0.9; }
+  50% { transform: scale(1.05); opacity: 1; }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-12px); }
+}
+
+@keyframes twinkle {
+  0%, 100% { opacity: 0.3; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+
+@keyframes bounceDots {
+  0%, 80%, 100% { transform: translateY(0); }
+  40% { transform: translateY(-8px); }
+}
+
+@keyframes pulseSoft {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.85); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes wiggle {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-3deg); }
+  75% { transform: rotate(3deg); }
+}
+
+@keyframes celebrate {
+  0% { transform: scale(0); opacity: 0; }
+  50% { transform: scale(1.2); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* ============================================================
+   Base Styles
+   ============================================================ */
+
+html {
+  scroll-behavior: smooth;
+  -webkit-tap-highlight-color: transparent;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-papaw-bg);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  min-height: 100dvh;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ============================================================
+   Scrollbar Styling
+   ============================================================ */
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-papaw-border);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-muted);
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-papaw-border) transparent;
+}
+
+/* ============================================================
+   Chat Bubble Styles
+   ============================================================ */
+
+.chat-bubble {
+  border-radius: 20px;
+  padding: 14px 18px;
+  max-width: 85%;
+  line-height: 1.6;
+  font-size: 1rem;
+  word-wrap: break-word;
+  position: relative;
+}
+
+.chat-bubble-child {
+  background: var(--color-bubble-child);
+  color: var(--color-text-primary);
+  border-bottom-right-radius: 6px;
+  margin-left: auto;
+}
+
+.chat-bubble-papaw {
+  background: var(--color-bubble-papaw);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-bubble-papaw-border);
+  border-bottom-left-radius: 6px;
+}
+
+/* ============================================================
+   Stagger Animation Utility
+   ============================================================ */
+
+.stagger-1 { animation-delay: 0.05s; }
+.stagger-2 { animation-delay: 0.1s; }
+.stagger-3 { animation-delay: 0.15s; }
+.stagger-4 { animation-delay: 0.2s; }
+.stagger-5 { animation-delay: 0.25s; }
+.stagger-6 { animation-delay: 0.3s; }
+
+/* ============================================================
+   Glass Effect
+   ============================================================ */
+
+.glass {
+  background: rgba(30, 32, 72, 0.6);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.glass-hover:hover {
+  background: rgba(39, 41, 86, 0.7);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+/* ============================================================
+   Touch Target Sizing (Accessibility)
+   ============================================================ */
+
+.touch-target {
+  min-height: 48px;
+  min-width: 48px;
+}
+
+/* ============================================================
+   Star Background Particles
+   ============================================================ */
+
+.star {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 50%;
+  animation: twinkle 3s ease-in-out infinite;
+}
+
+/* ============================================================
+   Gradient Text
+   ============================================================ */
+
+.gradient-text-amber {
+  background: linear-gradient(135deg, #fbbf24, #f59e0b, #d97706);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ============================================================
+   Input Focus Ring
+   ============================================================ */
+
+.papaw-input:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.3);
+  border-color: var(--color-warm-amber);
+}
+
+/* ============================================================
+   Page Transition
+   ============================================================ */
+
+.page-enter {
+  animation: fadeInUp 0.4s ease-out forwards;
 }

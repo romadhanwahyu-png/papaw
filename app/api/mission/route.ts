@@ -1,0 +1,258 @@
+// ============================================================
+// Papaw — Mission API Route
+// ============================================================
+
+import { NextRequest, NextResponse } from 'next/server';
+import { MissionRequest, MissionResponse, PapawContext, LLMMessage } from '@/types';
+import {
+  getProfile,
+  getSession,
+  createSession,
+  getRecentMessages,
+  saveMessage,
+  incrementMessageCount,
+  updateSession,
+  awardBadge,
+} from '@/lib/db-queries';
+import { getPendingWhispers } from '@/lib/db-queries';
+import { llm } from '@/lib/llm';
+import { buildMissionPrompt } from '@/lib/prompts';
+import { getBedtimeContext, formatTimeForPrompt, getDayName } from '@/lib/time';
+import {
+  getMission,
+  createMissionState,
+  advanceMissionState,
+  shouldAwardBadge,
+} from '@/lib/missions';
+
+export async function POST(request: NextRequest) {
+  try {
+    const body: MissionRequest = await request.json();
+    const { action, profileId, missionId, message, sessionId, quizAnswer } = body;
+
+    if (!profileId || !action) {
+      return NextResponse.json(
+        { error: 'profileId and action are required' },
+        { status: 400 }
+      );
+    }
+
+    const profile = await getProfile(profileId);
+    if (!profile) {
+      return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
+    }
+
+    switch (action) {
+      case 'start': {
+        if (!missionId) {
+          return NextResponse.json({ error: 'missionId is required' }, { status: 400 });
+        }
+
+        const mission = getMission(missionId);
+        if (!mission) {
+          return NextResponse.json({ error: 'Mission not found' }, { status: 404 });
+        }
+
+        // Create initial mission state
+        const missionState = createMissionState(missionId);
+
+        // Create a new session for this mission
+        const session = await createSession(profileId, missionState);
+
+        // Build context
+        const now = new Date();
+        const pendingWhispers = await getPendingWhispers(profileId);
+        const context: PapawContext = {
+          childName: profile.child_name,
+          papawName: profile.papaw_name,
+          language: profile.default_language,
+          bedtimeContext: getBedtimeContext(now),
+          currentTime: formatTimeForPrompt(now),
+          currentDay: getDayName(now),
+          recentMessages: [],
+          pendingWhispers,
+          missionState,
+        };
+
+        const systemPrompt = buildMissionPrompt(context, mission, missionState);
+        const introMessages: LLMMessage[] = [
+          { role: 'user', content: `Aku mau belajar tentang ${mission.title}!` },
+        ];
+
+        const response = await llm.chat(introMessages, systemPrompt);
+
+        await saveMessage(session.id, 'papaw', response);
+
+        const missionResponse: MissionResponse = {
+          response,
+          sessionId: session.id,
+          missionState,
+        };
+
+        return NextResponse.json(missionResponse);
+      }
+
+      case 'step': {
+        if (!sessionId || !message) {
+          return NextResponse.json(
+            { error: 'sessionId and message are required for step' },
+            { status: 400 }
+          );
+        }
+
+        const session = await getSession(sessionId);
+        if (!session || !session.mission_state) {
+          return NextResponse.json(
+            { error: 'Invalid session or no mission in progress' },
+            { status: 400 }
+          );
+        }
+
+        const currentMissionId = session.mission_state.missionId;
+        const mission = getMission(currentMissionId);
+        if (!mission) {
+          return NextResponse.json({ error: 'Mission not found' }, { status: 404 });
+        }
+
+        // Advance the state machine
+        const newState = advanceMissionState(
+          session.mission_state,
+          mission,
+          quizAnswer
+        );
+
+        // Update session with new state
+        await updateSession(sessionId, { mission_state: newState } as never);
+
+        // Load recent messages
+        const recentMessages = await getRecentMessages(sessionId, 10);
+        const llmMessages: LLMMessage[] = recentMessages.map((msg) => ({
+          role: msg.role === 'child' ? 'user' : 'model',
+          content: msg.content,
+        }));
+        llmMessages.push({ role: 'user', content: message });
+
+        // Build context
+        const now = new Date();
+        const pendingWhispers = await getPendingWhispers(profileId);
+        const context: PapawContext = {
+          childName: profile.child_name,
+          papawName: profile.papaw_name,
+          language: profile.default_language,
+          bedtimeContext: getBedtimeContext(now),
+          currentTime: formatTimeForPrompt(now),
+          currentDay: getDayName(now),
+          recentMessages: llmMessages,
+          pendingWhispers,
+          missionState: newState,
+        };
+
+        const systemPrompt = buildMissionPrompt(context, mission, newState);
+        const response = await llm.chat(llmMessages, systemPrompt);
+
+        // Save messages
+        await saveMessage(sessionId, 'child', message);
+        await saveMessage(sessionId, 'papaw', response);
+        await incrementMessageCount(sessionId);
+
+        // Check for badge award
+        let badge;
+        if (shouldAwardBadge(newState)) {
+          badge = await awardBadge(
+            profileId,
+            mission.id,
+            mission.badgeTitle,
+            mission.badgeIcon
+          );
+        }
+
+        const missionResponse: MissionResponse = {
+          response,
+          sessionId,
+          missionState: newState,
+          badge: badge || undefined,
+        };
+
+        return NextResponse.json(missionResponse);
+      }
+
+      case 'complete': {
+        if (!sessionId) {
+          return NextResponse.json(
+            { error: 'sessionId is required for complete' },
+            { status: 400 }
+          );
+        }
+
+        const session = await getSession(sessionId);
+        if (!session || !session.mission_state) {
+          return NextResponse.json(
+            { error: 'Invalid session or no mission in progress' },
+            { status: 400 }
+          );
+        }
+
+        const mission = getMission(session.mission_state.missionId);
+        if (!mission) {
+          return NextResponse.json({ error: 'Mission not found' }, { status: 404 });
+        }
+
+        // Award badge
+        const badge = await awardBadge(
+          profileId,
+          mission.id,
+          mission.badgeTitle,
+          mission.badgeIcon
+        );
+
+        // Build completion message
+        const now = new Date();
+        const context: PapawContext = {
+          childName: profile.child_name,
+          papawName: profile.papaw_name,
+          language: profile.default_language,
+          bedtimeContext: getBedtimeContext(now),
+          currentTime: formatTimeForPrompt(now),
+          currentDay: getDayName(now),
+          recentMessages: [],
+          pendingWhispers: [],
+          missionState: session.mission_state,
+        };
+
+        const systemPrompt = buildMissionPrompt(
+          context,
+          mission,
+          { ...session.mission_state, phase: 'complete' }
+        );
+
+        const response = await llm.chat(
+          [{ role: 'user', content: 'Aku selesai!' }],
+          systemPrompt
+        );
+
+        await saveMessage(sessionId, 'papaw', response);
+
+        const missionResponse: MissionResponse = {
+          response,
+          sessionId,
+          missionState: { ...session.mission_state, phase: 'complete' },
+          badge: badge || undefined,
+        };
+
+        return NextResponse.json(missionResponse);
+      }
+
+      default:
+        return NextResponse.json(
+          { error: `Unknown action: ${action}` },
+          { status: 400 }
+        );
+    }
+  } catch (error) {
+    console.error('[Mission API Error]', error);
+    return NextResponse.json(
+      { error: 'Mission encountered an error. Papaw will try again.' },
+      { status: 500 }
+    );
+  }
+}

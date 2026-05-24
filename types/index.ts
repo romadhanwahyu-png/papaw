@@ -203,7 +203,7 @@ export interface MissionResponse {
 }
 
 // --- Whisper API ---
-export type WhisperAction = 'create' | 'pending' | 'mark-delivered';
+export type WhisperAction = 'create' | 'pending' | 'mark-delivered' | 'history';
 
 export interface WhisperRequest {
   action: WhisperAction;

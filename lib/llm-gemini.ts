@@ -9,7 +9,7 @@ const FALLBACK_MESSAGE = 'Hmm, Papaw lagi mikir bentar nih. Coba tanya lagi yuk!
 
 export class GeminiProvider implements LLMProvider {
   private client: GoogleGenerativeAI;
-  private modelName = 'gemini-2.0-flash';
+  private modelName = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
 
   constructor() {
     const apiKey = process.env.GEMINI_API_KEY;
@@ -34,6 +34,16 @@ export class GeminiProvider implements LLMProvider {
       role: msg.role === 'user' ? 'user' as const : 'model' as const,
       parts: [{ text: msg.content }],
     }));
+
+    // Gemini requires the chat history to start with a 'user' message.
+    // If the first message in history is from the model (e.g., Papaw's welcome greeting),
+    // we prepend a simple user message to make it valid history.
+    if (history.length > 0 && history[0].role === 'model') {
+      history.unshift({
+        role: 'user' as const,
+        parts: [{ text: 'Halo Papaw!' }],
+      });
+    }
 
     const lastMessage = messages[messages.length - 1];
 
