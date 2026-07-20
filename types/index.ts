@@ -134,7 +134,9 @@ export type MissionCategory =
   | 'luar_angkasa'
   | 'hewan_alam'
   | 'penemuan_sains'
-  | 'teknologi';
+  | 'teknologi'
+  | 'bumi_iklim'
+  | 'dunia_digital';
 
 export interface MissionDefinition {
   id: string;
