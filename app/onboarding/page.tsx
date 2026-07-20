@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Language, BedtimeContext } from '@/types';
+import { Language } from '@/types';
 import { setProfileId, setLanguagePref } from '@/lib/storage';
 import { languageNames } from '@/lib/language';
 import { BedtimeBackground } from '@/components/BedtimeBackground';
 import { PapawAvatar } from '@/components/PapawAvatar';
-import { getBedtimeContext } from '@/lib/time';
+import { useBedtime } from '@/lib/use-bedtime';
 
 type OnboardingStep = 'name' | 'language' | 'intro';
 
@@ -18,11 +18,7 @@ export default function OnboardingPage() {
   const [language, setLanguage] = useState<Language>('mix');
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState('');
-  const [bedtimeMode, setBedtimeMode] = useState<BedtimeContext>('bedtime');
-
-  useEffect(() => {
-    setBedtimeMode(getBedtimeContext(new Date()));
-  }, []);
+  const bedtimeMode = useBedtime();
 
   const handleNameSubmit = useCallback(() => {
     const trimmed = childName.trim();

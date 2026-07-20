@@ -2,7 +2,7 @@
 // Papaw — Mission Seed Data & Engine
 // ============================================================
 
-import { MissionDefinition, MissionState, MissionCategory, CategoryInfo, QuizQuestion } from '@/types';
+import { MissionDefinition, MissionState, MissionCategory, CategoryInfo } from '@/types';
 
 // ============================================================
 // CATEGORY METADATA

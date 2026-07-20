@@ -1,21 +1,49 @@
 'use client';
 
 import { useState, useEffect, useCallback, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { WhisperComposer } from '@/components/WhisperComposer';
 import type { Whisper } from '@/types';
 
+function formatJakartaTime(iso: string): string {
+  return new Date(iso).toLocaleString('id-ID', {
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+/** Pure: derive the display status for a whisper given the current time. */
+function getWhisperStatus(w: Whisper, now: number): { label: string; color: string } {
+  if (w.delivered_at) {
+    return {
+      label: `✔️ Terkirim ke Anak pada ${formatJakartaTime(w.delivered_at)}`,
+      color: 'text-emerald-300 bg-emerald-500/10 border-emerald-500/20',
+    };
+  }
+  if (w.scheduled_for && new Date(w.scheduled_for).getTime() > now) {
+    return {
+      label: `📅 Dijadwalkan untuk ${formatJakartaTime(w.scheduled_for)}`,
+      color: 'text-indigo-300 bg-indigo-500/10 border-indigo-500/20',
+    };
+  }
+  return {
+    label: '⏳ Menunggu Terkirim',
+    color: 'text-amber-200/40 bg-white/3 border-white/5',
+  };
+}
+
 function PapaWhisperComposerPageContent() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const key = searchParams.get('k') || '';
 
-  const [authorized, setAuthorized] = useState<boolean | null>(null);
+  const [authorized, setAuthorized] = useState<boolean | null>(key ? null : false);
   const [profileId, setProfileId] = useState<string>('');
   const [childName, setChildName] = useState('');
   const [whispers, setWhispers] = useState<Whisper[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!!key);
   const [sending, setSending] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -44,11 +72,7 @@ function PapaWhisperComposerPageContent() {
 
   // Authenticate key and load data
   useEffect(() => {
-    if (!key) {
-      setAuthorized(false);
-      setLoading(false);
-      return;
-    }
+    if (!key) return;
 
     fetch('/api/papa-view', {
       method: 'POST',
@@ -139,6 +163,10 @@ function PapaWhisperComposerPageContent() {
     );
   }
 
+  // One-off current-time read for relative "scheduled / pending" whisper labels.
+  // eslint-disable-next-line react-hooks/purity -- display-only relative time; re-reads on each render are fine here
+  const now = Date.now();
+
   return (
     <div className="min-h-dvh bg-[#0a0b1e] text-amber-50 flex flex-col font-sans">
       {/* Header */}
@@ -179,34 +207,7 @@ function PapaWhisperComposerPageContent() {
           {whispers.length > 0 ? (
             <div className="space-y-3">
               {whispers.map((w) => {
-                const hasDelivered = !!w.delivered_at;
-                const isScheduledFuture =
-                  w.scheduled_for && new Date(w.scheduled_for).getTime() > Date.now();
-
-                let statusLabel = '⏳ Menunggu Terkirim';
-                let statusColor = 'text-amber-200/40 bg-white/3 border-white/5';
-
-                if (hasDelivered) {
-                  statusLabel = `✔️ Terkirim ke Anak pada ${new Date(
-                    w.delivered_at!
-                  ).toLocaleString('id-ID', {
-                    day: 'numeric',
-                    month: 'short',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}`;
-                  statusColor = 'text-emerald-300 bg-emerald-500/10 border-emerald-500/20';
-                } else if (isScheduledFuture) {
-                  statusLabel = `📅 Dijadwalkan untuk ${new Date(
-                    w.scheduled_for!
-                  ).toLocaleString('id-ID', {
-                    day: 'numeric',
-                    month: 'short',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}`;
-                  statusColor = 'text-indigo-300 bg-indigo-500/10 border-indigo-500/20';
-                }
+                const { label: statusLabel, color: statusColor } = getWhisperStatus(w, now);
 
                 return (
                   <div

@@ -8,22 +8,17 @@ import { BedtimeBackground } from '@/components/BedtimeBackground';
 import { PapawAvatar } from '@/components/PapawAvatar';
 import { CategoryGrid } from '@/components/CategoryGrid';
 import { MissionCard } from '@/components/MissionCard';
-import { getBedtimeContext } from '@/lib/time';
+import { useBedtime } from '@/lib/use-bedtime';
 import { categories as categoryMetadata, missions as allMissions } from '@/lib/missions';
-import type { Profile, CategoryInfo, MissionDefinition, BedtimeContext, MissionCategory } from '@/types';
+import type { Profile, CategoryInfo, MissionDefinition, MissionCategory } from '@/types';
 
 export default function ExplorePage() {
   const router = useRouter();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [badges, setBadges] = useState<{ badge_key: string }[]>([]);
   const [loading, setLoading] = useState(true);
-  const [bedtimeMode, setBedtimeMode] = useState<BedtimeContext>('bedtime');
+  const bedtimeMode = useBedtime();
   const [selectedCategory, setSelectedCategory] = useState<CategoryInfo | null>(null);
-
-  // Sync background with time
-  useEffect(() => {
-    setBedtimeMode(getBedtimeContext(new Date()));
-  }, []);
 
   // Fetch profile and badges
   useEffect(() => {

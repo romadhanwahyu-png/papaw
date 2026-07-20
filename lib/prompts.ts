@@ -11,7 +11,7 @@ import { getLanguageInstruction } from './language';
 
 export function buildPapawPrompt(context: PapawContext): string {
   const whisperInstruction = context.pendingWhispers.length > 0
-    ? buildWhisperDeliveryInstruction(context.pendingWhispers)
+    ? buildWhisperDeliveryInstruction(context.pendingWhispers, context.childName)
     : '';
 
   const bedtimeInstruction = buildBedtimeInstruction(context.bedtimeContext);
@@ -115,13 +115,13 @@ function buildBedtimeInstruction(bedtimeContext: string): string {
 // WHISPER DELIVERY
 // ============================================================
 
-export function buildWhisperDeliveryInstruction(whispers: Whisper[]): string {
+export function buildWhisperDeliveryInstruction(whispers: Whisper[], childName: string): string {
   if (whispers.length === 0) return '';
 
   const whisperTexts = whispers.map((w, i) => `  ${i + 1}. "${w.message}"`).join('\n');
 
   return `## Papa Whisper (PESAN DARI PAPA BENERAN)
-Papa titip pesan-pesan ini buat ${'{childName}'}:
+Papa titip pesan-pesan ini buat ${childName}:
 ${whisperTexts}
 
 INSTRUKSI PENTING:
@@ -144,7 +144,7 @@ export function buildMissionPrompt(
 ): string {
   const basePrompt = buildPapawPrompt(context);
 
-  const phaseInstruction = getMissionPhaseInstruction(mission, missionState);
+  const phaseInstruction = getMissionPhaseInstruction(mission, missionState, context.childName);
 
   return `${basePrompt}
 
@@ -164,17 +164,17 @@ ATURAN MISSION:
 - Kalau anak jawab quiz salah, tetap supportive — jelaskan jawabannya.`;
 }
 
-function getMissionPhaseInstruction(mission: MissionDefinition, state: MissionState): string {
+function getMissionPhaseInstruction(mission: MissionDefinition, state: MissionState, childName: string): string {
   switch (state.phase) {
     case 'intro':
       return `### Fase: INTRO
-Perkenalkan topik "${mission.title}" dengan cara yang bikin penasaran. Jangan langsung banjir informasi. Tanya ${'{childName}'} udah tau apa belum tentang topik ini.`;
+Perkenalkan topik "${mission.title}" dengan cara yang bikin penasaran. Jangan langsung banjir informasi. Tanya ${childName} udah tau apa belum tentang topik ini.`;
 
     case 'conversation':
       return `### Fase: PERCAKAPAN (Langkah ${state.currentStep + 1} dari ${mission.totalSteps})
 Lanjutkan percakapan tentang "${mission.title}". Ini langkah ke-${state.currentStep + 1}.
 - Kasih satu fakta/konsep menarik baru.
-- Tanya pendapat atau tebakan ${'{childName}'}.
+- Tanya pendapat atau tebakan ${childName}.
 - Connect dengan fakta sebelumnya kalau bisa.
 ${state.currentStep === mission.totalSteps - 1 ? '- Ini langkah terakhir. Wrap up percakapan dan bilang "sekarang mau coba quiz mini gak? Cuma beberapa pertanyaan kok!"' : ''}`;
 
@@ -192,12 +192,12 @@ ${options}
 Jawaban benar: ${String.fromCharCode(65 + q.correctIndex)}
 Penjelasan: ${q.explanation}
 
-Kalau ${'{childName}'} jawab benar → kasih pujian genuine (tapi jangan lebay).
+Kalau ${childName} jawab benar → kasih pujian genuine (tapi jangan lebay).
 Kalau salah → tetap supportive, jelaskan jawabannya.`;
 
     case 'complete':
       return `### Fase: SELESAI!
-${'{childName}'} sudah menyelesaikan mission "${mission.title}"! 
+${childName} sudah menyelesaikan mission "${mission.title}"!
 Score: ${state.quizScore}/${mission.quizQuestions.length}.
 Kasih celebration yang warm tapi proporsional. Bilang dia dapat badge baru!`;
 

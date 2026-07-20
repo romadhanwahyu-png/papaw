@@ -4,28 +4,24 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { getProfileId } from '@/lib/storage';
-import { BedtimeBackground } from '@/components/BedtimeBackground';
 import { PapawAvatar } from '@/components/PapawAvatar';
 import { ChatBubble } from '@/components/ChatBubble';
 import { MessageInput } from '@/components/MessageInput';
 import { LoadingDots } from '@/components/LoadingDots';
-import { getBedtimeContext } from '@/lib/time';
 import { getMission } from '@/lib/missions';
-import type { Profile, MissionDefinition, MissionState, BedtimeContext, Badge } from '@/types';
+import type { MissionDefinition, MissionState, Badge } from '@/types';
 
 export default function MissionChatPage() {
   const router = useRouter();
   const params = useParams();
   const missionId = params.missionId as string;
 
-  const [profile, setProfile] = useState<Profile | null>(null);
   const [mission, setMission] = useState<MissionDefinition | null>(null);
   const [messages, setMessages] = useState<{ id: string; role: 'child' | 'papaw'; content: string }[]>([]);
   const [missionState, setMissionState] = useState<MissionState | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
-  const [bedtimeMode, setBedtimeMode] = useState<BedtimeContext>('bedtime');
 
   // Quiz interactive state
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
@@ -44,11 +40,6 @@ export default function MissionChatPage() {
     scrollToBottom();
   }, [messages, isLoading, scrollToBottom]);
 
-  // Sync background
-  useEffect(() => {
-    setBedtimeMode(getBedtimeContext(new Date()));
-  }, []);
-
   // Initialize
   useEffect(() => {
     const profileId = getProfileId();
@@ -62,6 +53,7 @@ export default function MissionChatPage() {
       router.replace('/papaw/explore');
       return;
     }
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- mount-time init from route param + client storage; loader renders first
     setMission(currentMission);
 
     // Get Profile & Start Mission Session
@@ -73,7 +65,6 @@ export default function MissionChatPage() {
       .then((res) => res.json())
       .then((data) => {
         if (data.profile) {
-          setProfile(data.profile);
           // Start mission chat session
           return fetch('/api/mission', {
             method: 'POST',

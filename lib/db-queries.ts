@@ -128,18 +128,11 @@ export async function endSession(sessionId: string): Promise<void> {
 }
 
 export async function incrementMessageCount(sessionId: string): Promise<void> {
-  const { data } = await supabaseServer
-    .from('sessions')
-    .select('message_count')
-    .eq('id', sessionId)
-    .single();
-
-  if (data) {
-    await supabaseServer
-      .from('sessions')
-      .update({ message_count: (data.message_count || 0) + 1 })
-      .eq('id', sessionId);
-  }
+  // Atomic increment via RPC (see 003_rpcs.sql) — avoids the read-modify-write race.
+  const { error } = await supabaseServer.rpc('increment_message_count', {
+    p_session_id: sessionId,
+  });
+  if (error) console.error('incrementMessageCount failed:', error.message);
 }
 
 // ============================================================
@@ -166,15 +159,17 @@ export async function saveMessage(
 }
 
 export async function getRecentMessages(sessionId: string, limit: number = 10): Promise<Message[]> {
+  // Fetch the newest `limit` messages (DESC), then reverse to chronological order
+  // so the LLM receives history oldest → newest.
   const { data, error } = await supabaseServer
     .from('messages')
     .select('*')
     .eq('session_id', sessionId)
-    .order('created_at', { ascending: true })
+    .order('created_at', { ascending: false })
     .limit(limit);
 
   if (error) return [];
-  return (data || []) as Message[];
+  return ((data || []) as Message[]).reverse();
 }
 
 export async function updateMessageTags(
@@ -285,6 +280,22 @@ export async function markWhisperDelivered(whisperId: string): Promise<void> {
     .eq('id', whisperId);
 }
 
+/**
+ * Whether any whisper for this profile was already delivered at/after `sinceIso`.
+ * Used to enforce "one whisper per session" — we don't inject more whispers into
+ * the prompt once one has been delivered within the current session window.
+ */
+export async function hasDeliveredWhisperSince(profileId: string, sinceIso: string): Promise<boolean> {
+  const { data } = await supabaseServer
+    .from('whispers')
+    .select('id')
+    .eq('profile_id', profileId)
+    .gte('delivered_at', sinceIso)
+    .limit(1);
+
+  return !!(data && data.length > 0);
+}
+
 export async function getWhispers(profileId: string): Promise<Whisper[]> {
   const { data, error } = await supabaseServer
     .from('whispers')
@@ -301,33 +312,14 @@ export async function getWhispers(profileId: string): Promise<Whisper[]> {
 // ============================================================
 
 export async function updateTopicFrequency(profileId: string, topics: string[]): Promise<void> {
-  for (const topic of topics) {
-    // Try to increment existing
-    const { data } = await supabaseServer
-      .from('topic_frequency')
-      .select('id, count')
-      .eq('profile_id', profileId)
-      .eq('topic', topic)
-      .single();
-
-    if (data) {
-      await supabaseServer
-        .from('topic_frequency')
-        .update({
-          count: data.count + 1,
-          last_explored: new Date().toISOString(),
-        })
-        .eq('id', data.id);
-    } else {
-      await supabaseServer
-        .from('topic_frequency')
-        .insert({
-          profile_id: profileId,
-          topic,
-          count: 1,
-        });
-    }
-  }
+  if (topics.length === 0) return;
+  // Atomic batch upsert+increment via RPC (see 003_rpcs.sql) — replaces the
+  // per-topic select-then-write loop (N+1 + racy).
+  const { error } = await supabaseServer.rpc('increment_topic_frequency', {
+    p_profile_id: profileId,
+    p_topics: topics,
+  });
+  if (error) console.error('updateTopicFrequency failed:', error.message);
 }
 
 export async function getTopicFrequency(profileId: string): Promise<TopicFrequency[]> {
@@ -416,7 +408,7 @@ export async function getTodaySummary(profileId: string): Promise<TodaySummary> 
 
   // Get today's messages
   let messageCount = 0;
-  let criticalAlerts: CriticalAlert[] = [];
+  const criticalAlerts: CriticalAlert[] = [];
   const topicCounts: Record<string, number> = {};
 
   if (sessionIds.length > 0) {
@@ -483,7 +475,7 @@ export async function getWeekSummary(profileId: string): Promise<WeekSummary> {
 
   // Daily activity
   const dailyMap: Record<string, number> = {};
-  const sessionIds = (sessionList || []) as Session[] ? ((sessionList || []) as Session[]).map((s: Session) => s.id) : [];
+  const sessionIds = ((sessionList || []) as Session[]).map((s: Session) => s.id);
   
   let trendingTopics: string[] = [];
 

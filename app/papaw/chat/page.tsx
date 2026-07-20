@@ -3,20 +3,33 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Message, BedtimeContext } from '@/types';
 import { getProfileId, getSessionId, setSessionId } from '@/lib/storage';
 import { ChatBubble } from '@/components/ChatBubble';
 import { MessageInput } from '@/components/MessageInput';
 import { PapawAvatar } from '@/components/PapawAvatar';
 import { LoadingDots } from '@/components/LoadingDots';
 import { BedtimeBackground } from '@/components/BedtimeBackground';
-import { getBedtimeContext } from '@/lib/time';
+import { useBedtime } from '@/lib/use-bedtime';
 
 interface DisplayMessage {
   id: string;
   role: 'child' | 'papaw';
   content: string;
   created_at: string;
+}
+
+function getGreetingMessage(): string {
+  const hour = new Date().getHours();
+  if (hour >= 20 || hour < 6) {
+    return 'Hai! 🌙 Udah mau bobo ya? Mau cerita dulu atau Papaw yang cerita?';
+  }
+  if (hour >= 18) {
+    return 'Selamat malam! 🌆 Gimana hari ini? Mau cerita apa aja ke Papaw.';
+  }
+  if (hour >= 12) {
+    return 'Hai! ☀️ Udah pulang sekolah ya? Ada cerita seru hari ini?';
+  }
+  return 'Selamat pagi! 🌅 Pagi-pagi semangat ya! Mau ngobrol apa?';
 }
 
 export default function ChatPage() {
@@ -26,13 +39,9 @@ export default function ChatPage() {
   const [isInitializing, setIsInitializing] = useState(true);
   const [profileId, setProfileIdState] = useState<string | null>(null);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
-  const [bedtimeMode, setBedtimeMode] = useState<BedtimeContext>('bedtime');
+  const bedtimeMode = useBedtime();
   const scrollRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    setBedtimeMode(getBedtimeContext(new Date()));
-  }, []);
 
   // Auto-scroll to bottom
   const scrollToBottom = useCallback(() => {
@@ -43,46 +52,60 @@ export default function ChatPage() {
     scrollToBottom();
   }, [messages, isLoading, scrollToBottom]);
 
-  // Initialize
+  // Initialize from client-only storage after mount. We render a loader on the
+  // first pass (server + hydration) and hydrate real values here, which keeps
+  // SSR output stable — so these setStates intentionally live in the effect.
   useEffect(() => {
     const pid = getProfileId();
     if (!pid) {
       router.replace('/onboarding');
       return;
     }
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- mount-time hydration from localStorage; see comment above
     setProfileIdState(pid);
 
     const sid = getSessionId();
-    if (sid) {
-      setCurrentSessionId(sid);
-    }
 
-    // Load greeting message
-    setMessages([
-      {
-        id: 'greeting',
-        role: 'papaw',
-        content: getGreetingMessage(),
-        created_at: new Date().toISOString(),
-      },
-    ]);
+    const init = async () => {
+      // Try to restore the previous session's messages on reload.
+      if (sid) {
+        try {
+          const res = await fetch(
+            `/api/chat?sessionId=${encodeURIComponent(sid)}&profileId=${encodeURIComponent(pid)}`
+          );
+          const data = await res.json();
+          if (data.messages && data.messages.length > 0) {
+            setCurrentSessionId(sid);
+            setMessages(
+              data.messages.map((m: DisplayMessage) => ({
+                id: m.id,
+                role: m.role,
+                content: m.content,
+                created_at: m.created_at,
+              }))
+            );
+            setIsInitializing(false);
+            return;
+          }
+        } catch {
+          // fall through to greeting
+        }
+      }
 
-    setIsInitializing(false);
+      // Fresh start — show a time-appropriate greeting.
+      setMessages([
+        {
+          id: 'greeting',
+          role: 'papaw',
+          content: getGreetingMessage(),
+          created_at: new Date().toISOString(),
+        },
+      ]);
+      setIsInitializing(false);
+    };
+
+    init();
   }, [router]);
-
-  const getGreetingMessage = () => {
-    const hour = new Date().getHours();
-    if (hour >= 20 || hour < 6) {
-      return 'Hai! 🌙 Udah mau bobo ya? Mau cerita dulu atau Papaw yang cerita?';
-    }
-    if (hour >= 18) {
-      return 'Selamat malam! 🌆 Gimana hari ini? Mau cerita apa aja ke Papaw.';
-    }
-    if (hour >= 12) {
-      return 'Hai! ☀️ Udah pulang sekolah ya? Ada cerita seru hari ini?';
-    }
-    return 'Selamat pagi! 🌅 Pagi-pagi semangat ya! Mau ngobrol apa?';
-  };
 
   const sendMessage = useCallback(
     async (text: string) => {
@@ -113,24 +136,38 @@ export default function ChatPage() {
           }),
         });
 
-        if (!res.ok) throw new Error('Chat failed');
+        if (!res.ok || !res.body) throw new Error('Chat failed');
 
-        const data = await res.json();
-
-        // Save session ID
-        if (data.sessionId) {
-          setCurrentSessionId(data.sessionId);
-          setSessionId(data.sessionId);
+        // Persist the session id from the response header.
+        const sid = res.headers.get('X-Session-Id');
+        if (sid) {
+          setCurrentSessionId(sid);
+          setSessionId(sid);
         }
 
-        // Add Papaw response
-        const papawMsg: DisplayMessage = {
-          id: `papaw-${Date.now()}`,
-          role: 'papaw',
-          content: data.response,
-          created_at: new Date().toISOString(),
-        };
-        setMessages((prev) => [...prev, papawMsg]);
+        // Create an empty Papaw bubble and stream tokens into it.
+        const papawId = `papaw-${Date.now()}`;
+        setMessages((prev) => [
+          ...prev,
+          { id: papawId, role: 'papaw', content: '', created_at: new Date().toISOString() },
+        ]);
+        setIsLoading(false); // hide typing dots; text now streams into the bubble
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let streamDone = false;
+        while (!streamDone) {
+          const { value, done } = await reader.read();
+          streamDone = done;
+          if (value) {
+            const chunk = decoder.decode(value, { stream: true });
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === papawId ? { ...m, content: m.content + chunk } : m
+              )
+            );
+          }
+        }
       } catch {
         // Add error message
         const errorMsg: DisplayMessage = {

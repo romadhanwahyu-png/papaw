@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import type { Message } from '@/types';
 
@@ -11,15 +11,14 @@ interface GroupedMessages {
 }
 
 function ChatHistoryPageContent() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const key = searchParams.get('k') || '';
 
-  const [authorized, setAuthorized] = useState<boolean | null>(null);
+  const [authorized, setAuthorized] = useState<boolean | null>(key ? null : false);
   const [profileId, setProfileId] = useState<string>('');
   const [childName, setChildName] = useState('');
   const [groupedMessages, setGroupedMessages] = useState<GroupedMessages[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!!key);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -99,11 +98,7 @@ function ChatHistoryPageContent() {
 
   // Authenticate key and load initial data
   useEffect(() => {
-    if (!key) {
-      setAuthorized(false);
-      setLoading(false);
-      return;
-    }
+    if (!key) return;
 
     fetch('/api/papa-view', {
       method: 'POST',

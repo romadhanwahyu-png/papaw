@@ -93,6 +93,7 @@ export interface LLMMessage {
 
 export interface LLMProvider {
   chat(messages: LLMMessage[], systemPrompt: string): Promise<string>;
+  streamChat(messages: LLMMessage[], systemPrompt: string): AsyncIterable<string>;
   analyze(content: string, schema: AnalysisSchema): Promise<AnalysisResult>;
 }
 

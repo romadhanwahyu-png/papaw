@@ -3,9 +3,22 @@
 // ============================================================
 
 import { NextRequest, NextResponse } from 'next/server';
-import { Language } from '@/types';
+import { Language, Profile } from '@/types';
 import { createProfile, getProfile, updateProfile } from '@/lib/db-queries';
 import { buildPapaViewUrl } from '@/lib/parent-key';
+
+/**
+ * Strip the parent_view_key before returning a profile to the client.
+ * The key is the sole secret gating Papa View — it must never travel in a
+ * general profile response. It is revealed only via the explicit `share-url`
+ * action (and embedded in the one-time `papaViewUrl` at creation).
+ */
+type SafeProfile = Omit<Profile, 'parent_view_key'>;
+function sanitizeProfile(profile: Profile): SafeProfile {
+  const { parent_view_key: _omit, ...safe } = profile;
+  void _omit;
+  return safe;
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -28,11 +41,13 @@ export async function POST(request: NextRequest) {
         const lang: Language = validLanguages.includes(language) ? language : 'mix';
 
         const profile = await createProfile(childName, lang);
+        // The URL (which embeds the key) is returned once here so onboarding
+        // can show the parent their Papa View link.
         const papaViewUrl = buildPapaViewUrl(profile.parent_view_key);
 
         return NextResponse.json({
           success: true,
-          profile,
+          profile: sanitizeProfile(profile),
           papaViewUrl,
         });
       }
@@ -53,7 +68,29 @@ export async function POST(request: NextRequest) {
           );
         }
 
-        return NextResponse.json({ success: true, profile });
+        return NextResponse.json({ success: true, profile: sanitizeProfile(profile) });
+      }
+
+      case 'share-url': {
+        if (!profileId) {
+          return NextResponse.json(
+            { error: 'profileId is required' },
+            { status: 400 }
+          );
+        }
+
+        const profile = await getProfile(profileId);
+        if (!profile) {
+          return NextResponse.json(
+            { error: 'Profile not found' },
+            { status: 404 }
+          );
+        }
+
+        return NextResponse.json({
+          success: true,
+          papaViewUrl: buildPapaViewUrl(profile.parent_view_key),
+        });
       }
 
       case 'update': {
@@ -72,7 +109,7 @@ export async function POST(request: NextRequest) {
           );
         }
 
-        return NextResponse.json({ success: true, profile });
+        return NextResponse.json({ success: true, profile: sanitizeProfile(profile) });
       }
 
       default:

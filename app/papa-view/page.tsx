@@ -1,33 +1,30 @@
 'use client';
 
-import { useState, useEffect, useCallback, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useState, useEffect, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { HighlightCard } from '@/components/HighlightCard';
 import { TopicMap } from '@/components/TopicMap';
 import type { Highlight, TodaySummary, WeekSummary, TopicFrequency } from '@/types';
 
 function PapaViewDashboardContent() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const key = searchParams.get('k') || '';
 
-  const [authorized, setAuthorized] = useState<boolean | null>(null);
+  // Derive the no-key state during render so the effect never has to setState
+  // synchronously just to reject a missing key.
+  const [authorized, setAuthorized] = useState<boolean | null>(key ? null : false);
   const [childName, setChildName] = useState('');
   const [activeTab, setActiveTab] = useState<'today' | 'week'>('today');
   const [todaySummary, setTodaySummary] = useState<TodaySummary | null>(null);
   const [weekSummary, setWeekSummary] = useState<WeekSummary | null>(null);
   const [highlights, setHighlights] = useState<Highlight[]>([]);
   const [topics, setTopics] = useState<{ topic: string; count: number }[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!!key);
 
   // Authenticate parent key and load initial data
   useEffect(() => {
-    if (!key) {
-      setAuthorized(false);
-      setLoading(false);
-      return;
-    }
+    if (!key) return;
 
     // Authenticate and fetch stats
     Promise.all([

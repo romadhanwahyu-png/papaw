@@ -3,23 +3,19 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Profile, Language, BedtimeContext } from '@/types';
+import { Profile, Language } from '@/types';
 import { getProfileId } from '@/lib/storage';
 import { getGreeting } from '@/lib/language';
 import { BedtimeBackground } from '@/components/BedtimeBackground';
 import { PapawAvatar } from '@/components/PapawAvatar';
-import { getBedtimeContext } from '@/lib/time';
+import { useBedtime } from '@/lib/use-bedtime';
 
 export default function PapawHubPage() {
   const router = useRouter();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [greeting, setGreeting] = useState('');
   const [loading, setLoading] = useState(true);
-  const [bedtimeMode, setBedtimeMode] = useState<BedtimeContext>('bedtime');
-
-  useEffect(() => {
-    setBedtimeMode(getBedtimeContext(new Date()));
-  }, []);
+  const bedtimeMode = useBedtime();
 
   useEffect(() => {
     const profileId = getProfileId();

@@ -7,8 +7,8 @@ import { getProfileId } from '@/lib/storage';
 import { BedtimeBackground } from '@/components/BedtimeBackground';
 import { PapawAvatar } from '@/components/PapawAvatar';
 import { LanguageToggle } from '@/components/LanguageToggle';
-import { getBedtimeContext } from '@/lib/time';
-import type { Profile, Language, BedtimeContext } from '@/types';
+import { useBedtime } from '@/lib/use-bedtime';
+import type { Profile, Language } from '@/types';
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -17,13 +17,9 @@ export default function SettingsPage() {
   const [language, setLanguage] = useState<Language>('mix');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [bedtimeMode, setBedtimeMode] = useState<BedtimeContext>('bedtime');
+  const bedtimeMode = useBedtime();
   const [message, setMessage] = useState('');
-
-  // Sync background
-  useEffect(() => {
-    setBedtimeMode(getBedtimeContext(new Date()));
-  }, []);
+  const [papaViewUrl, setPapaViewUrl] = useState('');
 
   // Load Profile
   useEffect(() => {
@@ -52,6 +48,28 @@ export default function SettingsPage() {
         console.error('Error loading settings:', err);
       })
       .finally(() => setLoading(false));
+
+    // Fetch the Papa View share URL separately — the parent key is only
+    // returned by this explicit action, never in the general profile body.
+    fetch('/api/profile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'share-url', profileId }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.papaViewUrl) {
+          const path = data.papaViewUrl as string;
+          setPapaViewUrl(
+            typeof window !== 'undefined' && path.startsWith('/')
+              ? `${window.location.origin}${path}`
+              : path
+          );
+        }
+      })
+      .catch((err) => {
+        console.error('Error loading Papa View link:', err);
+      });
   }, [router]);
 
   // Save Settings
@@ -111,10 +129,6 @@ export default function SettingsPage() {
   }
 
   if (!profile) return null;
-
-  const papaViewUrl = typeof window !== 'undefined'
-    ? `${window.location.origin}/papa-view?k=${profile.parent_view_key}`
-    : `/papa-view?k=${profile.parent_view_key}`;
 
   return (
     <div className="relative min-h-dvh overflow-hidden bg-papaw-bg text-amber-50">
@@ -176,14 +190,15 @@ export default function SettingsPage() {
               </p>
               <div className="bg-black/20 rounded-xl p-3 border border-white/5 flex items-center justify-between gap-3 overflow-hidden select-all cursor-pointer">
                 <span className="text-xs font-mono text-amber-400/80 truncate select-all">
-                  {papaViewUrl}
+                  {papaViewUrl || 'Memuat link…'}
                 </span>
                 <button
+                  disabled={!papaViewUrl}
                   onClick={() => {
                     navigator.clipboard.writeText(papaViewUrl);
                     alert('Link berhasil disalin! 📋');
                   }}
-                  className="shrink-0 text-xs px-3 py-1.5 rounded-lg bg-white/10 text-amber-100 font-semibold hover:bg-white/15 active:scale-95"
+                  className="shrink-0 text-xs px-3 py-1.5 rounded-lg bg-white/10 text-amber-100 font-semibold hover:bg-white/15 active:scale-95 disabled:opacity-40"
                 >
                   Salin
                 </button>

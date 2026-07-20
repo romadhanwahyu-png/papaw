@@ -8,7 +8,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- ============================================================
 -- Profiles
 -- ============================================================
-CREATE TABLE profiles (
+CREATE TABLE IF NOT EXISTS profiles (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   child_name TEXT NOT NULL,
   papaw_name TEXT NOT NULL DEFAULT 'Papaw',
@@ -20,7 +20,7 @@ CREATE TABLE profiles (
 -- ============================================================
 -- Sessions
 -- ============================================================
-CREATE TABLE sessions (
+CREATE TABLE IF NOT EXISTS sessions (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   profile_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -29,13 +29,13 @@ CREATE TABLE sessions (
   mission_state JSONB
 );
 
-CREATE INDEX idx_sessions_profile ON sessions(profile_id);
-CREATE INDEX idx_sessions_started ON sessions(profile_id, started_at DESC);
+CREATE INDEX IF NOT EXISTS idx_sessions_profile ON sessions(profile_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_started ON sessions(profile_id, started_at DESC);
 
 -- ============================================================
 -- Messages
 -- ============================================================
-CREATE TABLE messages (
+CREATE TABLE IF NOT EXISTS messages (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   session_id UUID NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
   role TEXT NOT NULL CHECK (role IN ('child', 'papaw')),
@@ -45,13 +45,13 @@ CREATE TABLE messages (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_messages_session ON messages(session_id);
-CREATE INDEX idx_messages_profile_time ON messages(session_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id);
+CREATE INDEX IF NOT EXISTS idx_messages_profile_time ON messages(session_id, created_at DESC);
 
 -- ============================================================
 -- Badges
 -- ============================================================
-CREATE TABLE badges (
+CREATE TABLE IF NOT EXISTS badges (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   profile_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   badge_key TEXT NOT NULL,
@@ -61,12 +61,12 @@ CREATE TABLE badges (
   UNIQUE(profile_id, badge_key)
 );
 
-CREATE INDEX idx_badges_profile ON badges(profile_id);
+CREATE INDEX IF NOT EXISTS idx_badges_profile ON badges(profile_id);
 
 -- ============================================================
 -- Whispers (Papa → Papaw → Child)
 -- ============================================================
-CREATE TABLE whispers (
+CREATE TABLE IF NOT EXISTS whispers (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   profile_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   message TEXT NOT NULL,
@@ -75,12 +75,12 @@ CREATE TABLE whispers (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_whispers_pending ON whispers(profile_id, delivered_at) WHERE delivered_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_whispers_pending ON whispers(profile_id, delivered_at) WHERE delivered_at IS NULL;
 
 -- ============================================================
 -- Topic Frequency (aggregated)
 -- ============================================================
-CREATE TABLE topic_frequency (
+CREATE TABLE IF NOT EXISTS topic_frequency (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   profile_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   topic TEXT NOT NULL,
@@ -89,12 +89,12 @@ CREATE TABLE topic_frequency (
   UNIQUE(profile_id, topic)
 );
 
-CREATE INDEX idx_topic_freq_profile ON topic_frequency(profile_id);
+CREATE INDEX IF NOT EXISTS idx_topic_freq_profile ON topic_frequency(profile_id);
 
 -- ============================================================
 -- Highlights (auto-extracted notable moments)
 -- ============================================================
-CREATE TABLE highlights (
+CREATE TABLE IF NOT EXISTS highlights (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   profile_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   message_id UUID NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
@@ -103,4 +103,4 @@ CREATE TABLE highlights (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_highlights_profile ON highlights(profile_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_highlights_profile ON highlights(profile_id, created_at DESC);

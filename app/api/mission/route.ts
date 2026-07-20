@@ -2,8 +2,8 @@
 // Papaw — Mission API Route
 // ============================================================
 
-import { NextRequest, NextResponse } from 'next/server';
-import { MissionRequest, MissionResponse, PapawContext, LLMMessage } from '@/types';
+import { NextRequest, NextResponse, after } from 'next/server';
+import { MissionRequest, MissionResponse, PapawContext, LLMMessage, Whisper } from '@/types';
 import {
   getProfile,
   getSession,
@@ -13,10 +13,13 @@ import {
   incrementMessageCount,
   updateSession,
   awardBadge,
+  getPendingWhispers,
+  hasDeliveredWhisperSince,
+  markWhisperDelivered,
 } from '@/lib/db-queries';
-import { getPendingWhispers } from '@/lib/db-queries';
-import { llm } from '@/lib/llm';
+import { llm, LLM_FALLBACK_MESSAGE } from '@/lib/llm';
 import { buildMissionPrompt } from '@/lib/prompts';
+import { runAnalysis } from '@/lib/analyze';
 import { getBedtimeContext, formatTimeForPrompt, getDayName } from '@/lib/time';
 import {
   getMission,
@@ -59,9 +62,13 @@ export async function POST(request: NextRequest) {
         // Create a new session for this mission
         const session = await createSession(profileId, missionState);
 
+        // Offer at most the oldest pending whisper (fresh session → none delivered yet).
+        const pendingWhispers = await getPendingWhispers(profileId);
+        const whispersForPrompt: Whisper[] =
+          pendingWhispers.length > 0 ? [pendingWhispers[0]] : [];
+
         // Build context
         const now = new Date();
-        const pendingWhispers = await getPendingWhispers(profileId);
         const context: PapawContext = {
           childName: profile.child_name,
           papawName: profile.papaw_name,
@@ -70,7 +77,7 @@ export async function POST(request: NextRequest) {
           currentTime: formatTimeForPrompt(now),
           currentDay: getDayName(now),
           recentMessages: [],
-          pendingWhispers,
+          pendingWhispers: whispersForPrompt,
           missionState,
         };
 
@@ -82,6 +89,12 @@ export async function POST(request: NextRequest) {
         const response = await llm.chat(introMessages, systemPrompt);
 
         await saveMessage(session.id, 'papaw', response);
+
+        if (response !== LLM_FALLBACK_MESSAGE && whispersForPrompt.length > 0) {
+          for (const w of whispersForPrompt) {
+            await markWhisperDelivered(w.id);
+          }
+        }
 
         const missionResponse: MissionResponse = {
           response,
@@ -132,9 +145,21 @@ export async function POST(request: NextRequest) {
         }));
         llmMessages.push({ role: 'user', content: message });
 
+        // Offer at most ONE whisper per session.
+        const pendingWhispers = await getPendingWhispers(profileId);
+        let whispersForPrompt: Whisper[] = [];
+        if (pendingWhispers.length > 0) {
+          const alreadyDelivered = await hasDeliveredWhisperSince(
+            profileId,
+            session.started_at
+          );
+          if (!alreadyDelivered) {
+            whispersForPrompt = [pendingWhispers[0]];
+          }
+        }
+
         // Build context
         const now = new Date();
-        const pendingWhispers = await getPendingWhispers(profileId);
         const context: PapawContext = {
           childName: profile.child_name,
           papawName: profile.papaw_name,
@@ -143,17 +168,35 @@ export async function POST(request: NextRequest) {
           currentTime: formatTimeForPrompt(now),
           currentDay: getDayName(now),
           recentMessages: llmMessages,
-          pendingWhispers,
+          pendingWhispers: whispersForPrompt,
           missionState: newState,
         };
 
         const systemPrompt = buildMissionPrompt(context, mission, newState);
         const response = await llm.chat(llmMessages, systemPrompt);
+        const isRealResponse = response !== LLM_FALLBACK_MESSAGE;
 
         // Save messages
-        await saveMessage(sessionId, 'child', message);
+        const childMsg = await saveMessage(sessionId, 'child', message);
         await saveMessage(sessionId, 'papaw', response);
         await incrementMessageCount(sessionId);
+
+        // Mark delivered whisper + background analysis (real responses only).
+        if (isRealResponse && whispersForPrompt.length > 0) {
+          for (const w of whispersForPrompt) {
+            await markWhisperDelivered(w.id);
+          }
+        }
+        if (isRealResponse) {
+          after(() =>
+            runAnalysis({
+              messageId: childMsg.id,
+              childMessage: message,
+              papawResponse: response,
+              profileId,
+            })
+          );
+        }
 
         // Check for badge award
         let badge;

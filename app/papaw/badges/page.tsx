@@ -7,21 +7,16 @@ import { getProfileId } from '@/lib/storage';
 import { BedtimeBackground } from '@/components/BedtimeBackground';
 import { PapawAvatar } from '@/components/PapawAvatar';
 import { BadgeCard } from '@/components/BadgeCard';
-import { getBedtimeContext } from '@/lib/time';
+import { useBedtime } from '@/lib/use-bedtime';
 import { missions as allMissions } from '@/lib/missions';
-import type { Profile, Badge, BedtimeContext } from '@/types';
+import type { Profile, Badge } from '@/types';
 
 export default function BadgesPage() {
   const router = useRouter();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [earnedBadges, setEarnedBadges] = useState<Badge[]>([]);
   const [loading, setLoading] = useState(true);
-  const [bedtimeMode, setBedtimeMode] = useState<BedtimeContext>('bedtime');
-
-  // Sync background with time
-  useEffect(() => {
-    setBedtimeMode(getBedtimeContext(new Date()));
-  }, []);
+  const bedtimeMode = useBedtime();
 
   // Fetch profile and earned badges
   useEffect(() => {

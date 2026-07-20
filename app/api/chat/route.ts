@@ -2,8 +2,8 @@
 // Papaw — Chat API Route
 // ============================================================
 
-import { NextRequest, NextResponse } from 'next/server';
-import { ChatRequest, ChatResponse, PapawContext, LLMMessage } from '@/types';
+import { NextRequest, NextResponse, after } from 'next/server';
+import { ChatRequest, PapawContext, LLMMessage, Whisper } from '@/types';
 import {
   getProfile,
   getActiveSession,
@@ -12,16 +12,19 @@ import {
   getRecentMessages,
   saveMessage,
   incrementMessageCount,
+  getPendingWhispers,
+  hasDeliveredWhisperSince,
+  markWhisperDelivered,
 } from '@/lib/db-queries';
-import { getPendingWhispers } from '@/lib/db-queries';
-import { llm } from '@/lib/llm';
+import { llm, LLM_FALLBACK_MESSAGE } from '@/lib/llm';
 import { buildPapawPrompt } from '@/lib/prompts';
+import { runAnalysis } from '@/lib/analyze';
 import { getBedtimeContext, formatTimeForPrompt, getDayName } from '@/lib/time';
 
 export async function POST(request: NextRequest) {
   try {
     const body: ChatRequest = await request.json();
-    const { profileId, message, sessionId: requestedSessionId, mode } = body;
+    const { profileId, message, sessionId: requestedSessionId } = body;
 
     if (!profileId || !message) {
       return NextResponse.json(
@@ -61,8 +64,20 @@ export async function POST(request: NextRequest) {
     // Add current message
     llmMessages.push({ role: 'user', content: message });
 
-    // 4. Load pending whispers
+    // 4. Load pending whispers — deliver at most ONE per session.
+    // If a whisper was already delivered within this session window, don't
+    // inject any more; otherwise offer only the oldest pending whisper.
     const pendingWhispers = await getPendingWhispers(profileId);
+    let whispersForPrompt: Whisper[] = [];
+    if (pendingWhispers.length > 0) {
+      const alreadyDelivered = await hasDeliveredWhisperSince(
+        profileId,
+        session.started_at
+      );
+      if (!alreadyDelivered) {
+        whispersForPrompt = [pendingWhispers[0]];
+      }
+    }
 
     // 5. Build PapawContext
     const now = new Date();
@@ -74,49 +89,116 @@ export async function POST(request: NextRequest) {
       currentTime: formatTimeForPrompt(now),
       currentDay: getDayName(now),
       recentMessages: llmMessages,
-      pendingWhispers,
+      pendingWhispers: whispersForPrompt,
       missionState: null,
     };
 
     // 6. Build system prompt
     const systemPrompt = buildPapawPrompt(context);
 
-    // 7. Call LLM
-    const response = await llm.chat(llmMessages, systemPrompt);
+    // 7. Stream the LLM response. We accumulate the full text so we can persist
+    // it, mark whispers, and trigger analysis once the stream finishes.
+    const activeSession = session;
+    const encoder = new TextEncoder();
 
-    // 8. Save both messages to DB
-    const childMsg = await saveMessage(session.id, 'child', message);
-    await saveMessage(session.id, 'papaw', response);
-    await incrementMessageCount(session.id);
+    const stream = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        let full = '';
+        try {
+          for await (const delta of llm.streamChat(llmMessages, systemPrompt)) {
+            full += delta;
+            controller.enqueue(encoder.encode(delta));
+          }
+        } catch (streamError) {
+          console.error('[Chat Stream Error]', streamError);
+        }
 
-    // 9. Fire-and-forget analyze (don't await)
-    if (mode === 'free') {
-      fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/analyze`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messageId: childMsg.id,
-          childMessage: message,
-          papawResponse: response,
-          profileId,
-        }),
-      }).catch(() => {
-        // Silently fail — analysis is non-critical
-      });
-    }
+        // If nothing streamed, emit the fallback so the child always sees text.
+        if (!full) {
+          full = LLM_FALLBACK_MESSAGE;
+          controller.enqueue(encoder.encode(full));
+        }
+        controller.close();
 
-    // 10. Return response
-    const chatResponse: ChatResponse = {
-      response,
-      sessionId: session.id,
-    };
+        const isRealResponse = full !== LLM_FALLBACK_MESSAGE;
 
-    return NextResponse.json(chatResponse);
+        try {
+          const childMsg = await saveMessage(activeSession.id, 'child', message);
+          await saveMessage(activeSession.id, 'papaw', full);
+          await incrementMessageCount(activeSession.id);
+
+          // Mark the offered whisper delivered only on a real response.
+          if (isRealResponse && whispersForPrompt.length > 0) {
+            for (const w of whispersForPrompt) {
+              await markWhisperDelivered(w.id);
+            }
+          }
+
+          // Background analysis after the response is flushed.
+          if (isRealResponse) {
+            after(() =>
+              runAnalysis({
+                messageId: childMsg.id,
+                childMessage: message,
+                papawResponse: full,
+                profileId,
+              })
+            );
+          }
+        } catch (persistError) {
+          console.error('[Chat Persist Error]', persistError);
+        }
+      },
+    });
+
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Cache-Control': 'no-cache, no-transform',
+        'X-Session-Id': activeSession.id,
+      },
+    });
   } catch (error) {
     console.error('[Chat API Error]', error);
     return NextResponse.json(
       { error: 'Something went wrong. Papaw will be back shortly.' },
       { status: 500 }
     );
+  }
+}
+
+// ------------------------------------------------------------
+// GET /api/chat?sessionId=...&profileId=...
+// Restore the recent messages for a session so the chat UI can rehydrate on
+// reload. Validates that the session belongs to the given profile.
+// ------------------------------------------------------------
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const sessionId = searchParams.get('sessionId');
+    const profileId = searchParams.get('profileId');
+
+    if (!sessionId || !profileId) {
+      return NextResponse.json({ messages: [] });
+    }
+
+    const session = await getSession(sessionId);
+    if (!session || session.profile_id !== profileId) {
+      return NextResponse.json({ messages: [] });
+    }
+
+    const messages = await getRecentMessages(sessionId, 30);
+    return NextResponse.json({
+      sessionId,
+      messages: messages.map((m) => ({
+        id: m.id,
+        role: m.role,
+        content: m.content,
+        created_at: m.created_at,
+      })),
+    });
+  } catch (error) {
+    console.error('[Chat History API Error]', error);
+    return NextResponse.json({ messages: [] });
   }
 }

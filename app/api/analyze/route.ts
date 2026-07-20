@@ -1,16 +1,14 @@
 // ============================================================
-// Papaw — Analyze API Route (Fire-and-Forget)
+// Papaw — Analyze API Route
 // ============================================================
+//
+// Kept for backward compatibility / manual re-analysis. The main chat and
+// mission flows now call `runAnalysis` in-process via `after()` instead of
+// posting to this endpoint.
 
 import { NextRequest, NextResponse } from 'next/server';
 import { AnalyzeRequest } from '@/types';
-import { llm } from '@/lib/llm';
-import { buildAnalyzerPrompt } from '@/lib/prompts';
-import {
-  updateMessageTags,
-  updateTopicFrequency,
-  saveHighlight,
-} from '@/lib/db-queries';
+import { runAnalysis } from '@/lib/analyze';
 
 export async function POST(request: NextRequest) {
   try {
@@ -24,32 +22,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Build analysis prompt
-    const analyzerPrompt = buildAnalyzerPrompt(childMessage, papawResponse);
-
-    // Call LLM analyze
-    const result = await llm.analyze(analyzerPrompt, {
-      description:
-        'Analyze the child\'s message for topic tags, critical topics, and highlight-worthy moments. Return JSON with: topic_tags (string[]), is_critical (boolean), is_highlight ("curious_question" | "cute_moment" | "deep_thinking" | null), excerpt (string | null — a short quote if highlight-worthy).',
+    await runAnalysis({
+      messageId,
+      childMessage,
+      papawResponse: papawResponse || '',
+      profileId,
     });
-
-    // Update message tags
-    await updateMessageTags(messageId, result.topic_tags, result.is_critical);
-
-    // Update topic frequency
-    if (result.topic_tags.length > 0) {
-      await updateTopicFrequency(profileId, result.topic_tags);
-    }
-
-    // Save highlight if detected
-    if (result.is_highlight && result.excerpt) {
-      await saveHighlight(
-        profileId,
-        messageId,
-        result.is_highlight,
-        result.excerpt
-      );
-    }
 
     return NextResponse.json({ success: true });
   } catch (error) {

@@ -1,77 +1,58 @@
 // ============================================================
-// Papaw — Gemini LLM Provider
+// Papaw — Gemini LLM Provider (@google/genai)
 // ============================================================
 
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
 import { LLMProvider, LLMMessage, AnalysisResult, AnalysisSchema } from '@/types';
+import { LLM_FALLBACK_MESSAGE, normalizeHistory } from './llm';
 
-const FALLBACK_MESSAGE = 'Hmm, Papaw lagi mikir bentar nih. Coba tanya lagi yuk!';
+const FALLBACK_MESSAGE = LLM_FALLBACK_MESSAGE;
+
+/** Map our LLMMessage[] to the @google/genai `contents` format. */
+function toContents(messages: LLMMessage[]) {
+  return normalizeHistory(messages).map((msg) => ({
+    role: msg.role === 'user' ? 'user' : 'model',
+    parts: [{ text: msg.content }],
+  }));
+}
 
 export class GeminiProvider implements LLMProvider {
-  private client: GoogleGenerativeAI;
-  private modelName = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
+  private client: GoogleGenAI;
+  private modelName = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
 
   constructor() {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
       throw new Error('GEMINI_API_KEY is not set');
     }
-    this.client = new GoogleGenerativeAI(apiKey);
+    this.client = new GoogleGenAI({ apiKey });
   }
 
   /**
-   * Send chat messages and get a text response
-   * Retries 1x with 1s backoff on failure
+   * Send chat messages and get a full text response.
+   * Retries 1x with 1s backoff on failure.
    */
   async chat(messages: LLMMessage[], systemPrompt: string): Promise<string> {
-    const model = this.client.getGenerativeModel({
-      model: this.modelName,
-      systemInstruction: systemPrompt,
-    });
+    const contents = toContents(messages);
 
-    // Convert messages to Gemini format
-    const history = messages.slice(0, -1).map(msg => ({
-      role: msg.role === 'user' ? 'user' as const : 'model' as const,
-      parts: [{ text: msg.content }],
-    }));
-
-    // Gemini requires the chat history to start with a 'user' message.
-    // If the first message in history is from the model (e.g., Papaw's welcome greeting),
-    // we prepend a simple user message to make it valid history.
-    if (history.length > 0 && history[0].role === 'model') {
-      history.unshift({
-        role: 'user' as const,
-        parts: [{ text: 'Halo Papaw!' }],
+    const call = async () => {
+      const result = await this.client.models.generateContent({
+        model: this.modelName,
+        contents,
+        config: { systemInstruction: systemPrompt },
       });
-    }
-
-    const lastMessage = messages[messages.length - 1];
+      const text = result.text;
+      if (!text) throw new Error('Empty response from Gemini');
+      return text;
+    };
 
     try {
-      const chat = model.startChat({ history });
-      const result = await chat.sendMessage(lastMessage.content);
-      const response = result.response.text();
-      
-      if (!response) {
-        throw new Error('Empty response from Gemini');
-      }
-      
-      return response;
+      return await call();
     } catch (error) {
       console.error('Gemini chat error (attempt 1):', error);
-      
-      // Retry once with 1s backoff
       try {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        const chat = model.startChat({ history });
-        const result = await chat.sendMessage(lastMessage.content);
-        const response = result.response.text();
-        
-        if (!response) {
-          throw new Error('Empty response from Gemini (retry)');
-        }
-        
-        return response;
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        return await call();
       } catch (retryError) {
         console.error('Gemini chat error (attempt 2):', retryError);
         return FALLBACK_MESSAGE;
@@ -80,16 +61,27 @@ export class GeminiProvider implements LLMProvider {
   }
 
   /**
-   * Analyze content and return structured JSON output
+   * Stream a chat response as text deltas.
    */
-  async analyze(content: string, schema: AnalysisSchema): Promise<AnalysisResult> {
-    const model = this.client.getGenerativeModel({
+  async *streamChat(messages: LLMMessage[], systemPrompt: string): AsyncIterable<string> {
+    const contents = toContents(messages);
+
+    const stream = await this.client.models.generateContentStream({
       model: this.modelName,
-      generationConfig: {
-        responseMimeType: 'application/json',
-      },
+      contents,
+      config: { systemInstruction: systemPrompt },
     });
 
+    for await (const chunk of stream) {
+      const text = chunk.text;
+      if (text) yield text;
+    }
+  }
+
+  /**
+   * Analyze content and return structured JSON output.
+   */
+  async analyze(content: string, schema: AnalysisSchema): Promise<AnalysisResult> {
     const prompt = `${schema.description}
 
 Analyze the following conversation content and return a JSON object with these fields:
@@ -104,10 +96,16 @@ ${content}
 Return ONLY the JSON object, no other text.`;
 
     try {
-      const result = await model.generateContent(prompt);
-      const text = result.response.text();
+      const result = await this.client.models.generateContent({
+        model: this.modelName,
+        contents: prompt,
+        config: { responseMimeType: 'application/json' },
+      });
+
+      const text = result.text;
+      if (!text) throw new Error('Empty analyze response from Gemini');
       const parsed = JSON.parse(text);
-      
+
       return {
         topic_tags: parsed.topic_tags || [],
         is_critical: parsed.is_critical || false,
@@ -116,7 +114,6 @@ Return ONLY the JSON object, no other text.`;
       };
     } catch (error) {
       console.error('Gemini analyze error:', error);
-      // Return safe defaults on failure
       return {
         topic_tags: [],
         is_critical: false,
