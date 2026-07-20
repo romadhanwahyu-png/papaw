@@ -8,11 +8,13 @@ export interface Profile {
   child_name: string;
   papaw_name: string; // default 'Papaw'
   default_language: Language;
+  child_gender: Gender;
   parent_view_key: string;
   created_at: string;
 }
 
 export type Language = 'id' | 'en' | 'mix';
+export type Gender = 'male' | 'female' | 'unspecified';
 
 // --- Session ---
 export interface Session {
@@ -116,6 +118,7 @@ export interface PapawContext {
   childName: string;
   papawName: string;
   language: Language;
+  childGender: Gender;
   bedtimeContext: BedtimeContext;
   currentTime: string; // human-readable
   currentDay: string;  // e.g., 'Jumat'

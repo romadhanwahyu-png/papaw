@@ -8,13 +8,14 @@ import { BedtimeBackground } from '@/components/BedtimeBackground';
 import { PapawAvatar } from '@/components/PapawAvatar';
 import { LanguageToggle } from '@/components/LanguageToggle';
 import { useBedtime } from '@/lib/use-bedtime';
-import type { Profile, Language } from '@/types';
+import type { Profile, Language, Gender } from '@/types';
 
 export default function SettingsPage() {
   const router = useRouter();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [childName, setChildName] = useState('');
   const [language, setLanguage] = useState<Language>('mix');
+  const [gender, setGender] = useState<Gender>('unspecified');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const bedtimeMode = useBedtime();
@@ -40,6 +41,7 @@ export default function SettingsPage() {
           setProfile(data.profile);
           setChildName(data.profile.child_name);
           setLanguage(data.profile.default_language);
+          setGender(data.profile.child_gender || 'unspecified');
         } else {
           router.replace('/onboarding');
         }
@@ -96,6 +98,7 @@ export default function SettingsPage() {
           updates: {
             child_name: trimmed,
             default_language: language,
+            child_gender: gender,
           },
         }),
       });
@@ -115,7 +118,7 @@ export default function SettingsPage() {
     } finally {
       setSaving(false);
     }
-  }, [childName, language, saving]);
+  }, [childName, language, gender, saving]);
 
   if (loading) {
     return (
@@ -166,6 +169,33 @@ export default function SettingsPage() {
               placeholder="Masukkan nama panggilan..."
               maxLength={30}
             />
+          </div>
+
+          {/* Gender Field */}
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-amber-200/50 uppercase tracking-wider block">
+              Papaw memanggil kamu sebagai
+            </label>
+            <div className="grid grid-cols-3 gap-2">
+              {([
+                ['male', '👦 Laki-laki'],
+                ['female', '👧 Perempuan'],
+                ['unspecified', 'Rahasia'],
+              ] as [Gender, string][]).map(([g, label]) => (
+                <button
+                  key={g}
+                  type="button"
+                  onClick={() => setGender(g)}
+                  className={`py-3 px-2 rounded-xl border text-sm font-semibold transition-all active:scale-[0.97] ${
+                    gender === g
+                      ? 'bg-warm-amber/20 border-warm-amber text-warm-amber-soft'
+                      : 'bg-white/5 border-white/10 text-amber-50/80 hover:bg-white/8'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Language Toggle Field */}

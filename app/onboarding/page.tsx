@@ -2,20 +2,21 @@
 
 import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Language } from '@/types';
+import { Language, Gender } from '@/types';
 import { setProfileId, setLanguagePref } from '@/lib/storage';
 import { languageNames } from '@/lib/language';
 import { BedtimeBackground } from '@/components/BedtimeBackground';
 import { PapawAvatar } from '@/components/PapawAvatar';
 import { useBedtime } from '@/lib/use-bedtime';
 
-type OnboardingStep = 'name' | 'language' | 'intro';
+type OnboardingStep = 'name' | 'language' | 'gender' | 'intro';
 
 export default function OnboardingPage() {
   const router = useRouter();
   const [step, setStep] = useState<OnboardingStep>('name');
   const [childName, setChildName] = useState('');
   const [language, setLanguage] = useState<Language>('mix');
+  const [gender, setGender] = useState<Gender>('unspecified');
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState('');
   const bedtimeMode = useBedtime();
@@ -36,6 +37,11 @@ export default function OnboardingPage() {
 
   const handleLanguageSelect = useCallback((lang: Language) => {
     setLanguage(lang);
+    setStep('gender');
+  }, []);
+
+  const handleGenderSelect = useCallback((g: Gender) => {
+    setGender(g);
     setStep('intro');
   }, []);
 
@@ -50,6 +56,7 @@ export default function OnboardingPage() {
         body: JSON.stringify({
           childName: childName.trim(),
           language,
+          gender,
         }),
       });
 
@@ -67,7 +74,7 @@ export default function OnboardingPage() {
       setError('Oops, coba lagi ya!');
       setIsCreating(false);
     }
-  }, [childName, language, router]);
+  }, [childName, language, gender, router]);
 
   return (
     <div className="relative min-h-dvh overflow-hidden">
@@ -156,6 +163,49 @@ export default function OnboardingPage() {
 
               <button
                 onClick={() => setStep('name')}
+                className="text-text-muted hover:text-text-secondary transition-colors text-sm"
+              >
+                ← Kembali
+              </button>
+            </div>
+          )}
+
+          {/* Step: Gender */}
+          {step === 'gender' && (
+            <div className="animate-fade-in-up flex flex-col items-center gap-8">
+              <div className="text-7xl animate-float">🧒</div>
+
+              <div className="text-center space-y-3">
+                <h1 className="text-3xl font-bold text-warm-cream">
+                  {childName} anak...
+                </h1>
+                <p className="text-text-secondary text-lg">
+                  Biar Papaw manggilnya pas 😊
+                </p>
+              </div>
+
+              <div className="w-full space-y-3">
+                {([
+                  ['male', '👦 Laki-laki'],
+                  ['female', '👧 Perempuan'],
+                  ['unspecified', 'Nanti aja / rahasia'],
+                ] as [Gender, string][]).map(([g, label]) => (
+                  <button
+                    key={g}
+                    onClick={() => handleGenderSelect(g)}
+                    className={`touch-target w-full py-4 px-6 rounded-2xl border text-left text-lg font-semibold transition-all duration-300 active:scale-[0.97] ${
+                      gender === g
+                        ? 'bg-warm-amber/20 border-warm-amber text-warm-amber-soft'
+                        : 'bg-papaw-surface border-papaw-border text-text-primary hover:bg-papaw-surface-hover hover:border-papaw-card-hover'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                onClick={() => setStep('language')}
                 className="text-text-muted hover:text-text-secondary transition-colors text-sm"
               >
                 ← Kembali

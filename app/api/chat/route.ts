@@ -85,6 +85,7 @@ export async function POST(request: NextRequest) {
       childName: profile.child_name,
       papawName: profile.papaw_name,
       language: profile.default_language,
+      childGender: profile.child_gender,
       bedtimeContext: getBedtimeContext(now),
       currentTime: formatTimeForPrompt(now),
       currentDay: getDayName(now),

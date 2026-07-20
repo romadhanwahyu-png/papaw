@@ -10,6 +10,10 @@
 import { BedtimeContext } from '@/types';
 
 const DAYS_ID = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+const MONTHS_ID = [
+  'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+  'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
+];
 
 // Override-able for testing or if the family moves timezones.
 const TIME_ZONE = process.env.APP_TIME_ZONE || 'Asia/Jakarta';
@@ -22,9 +26,12 @@ interface WibParts {
   hour: number;
   minute: number;
   weekday: number; // 0 = Minggu ... 6 = Sabtu
+  day: number;     // 1..31
+  month: number;   // 1..12
+  year: number;
 }
 
-/** Extract hour/minute/weekday in WIB from any Date. */
+/** Extract date/time parts in WIB from any Date. */
 function getWibParts(now: Date): WibParts {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: TIME_ZONE,
@@ -32,6 +39,9 @@ function getWibParts(now: Date): WibParts {
     minute: '2-digit',
     hourCycle: 'h23',
     weekday: 'short',
+    day: 'numeric',
+    month: 'numeric',
+    year: 'numeric',
   }).formatToParts(now);
 
   const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
@@ -39,6 +49,9 @@ function getWibParts(now: Date): WibParts {
     hour: parseInt(get('hour'), 10),
     minute: parseInt(get('minute'), 10),
     weekday: WEEKDAY_INDEX[get('weekday')] ?? now.getUTCDay(),
+    day: parseInt(get('day'), 10),
+    month: parseInt(get('month'), 10),
+    year: parseInt(get('year'), 10),
   };
 }
 
@@ -61,14 +74,15 @@ export function getBedtimeContext(now: Date): BedtimeContext {
 }
 
 /**
- * Format time for injection into Papaw's system prompt
- * e.g., "Jumat, 20:30 WIB"
+ * Format the full current date + time (WIB) for Papaw's system prompt.
+ * e.g., "Senin, 20 Juli 2026, 21:30 WIB". Includes the YEAR so Papaw doesn't
+ * fall back to its training-cutoff assumption about what year it is.
  */
 export function formatTimeForPrompt(now: Date): string {
-  const { hour, minute, weekday } = getWibParts(now);
+  const { hour, minute, weekday, day, month, year } = getWibParts(now);
   const hh = hour.toString().padStart(2, '0');
   const mm = minute.toString().padStart(2, '0');
-  return `${DAYS_ID[weekday]}, ${hh}:${mm} WIB`;
+  return `${DAYS_ID[weekday]}, ${day} ${MONTHS_ID[month - 1]} ${year}, ${hh}:${mm} WIB`;
 }
 
 /**

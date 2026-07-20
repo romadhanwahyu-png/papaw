@@ -16,6 +16,7 @@ export function buildPapawPrompt(context: PapawContext): string {
 
   const bedtimeInstruction = buildBedtimeInstruction(context.bedtimeContext);
   const languageInstruction = getLanguageInstruction(context.language);
+  const genderInstruction = buildGenderInstruction(context.childGender, context.childName);
 
   return `# Kamu adalah ${context.papawName}
 
@@ -70,10 +71,14 @@ ${context.papawName}: Nah ini pertanyaan klasik yang jawabannya sebenernya keren
 
 Tau gak, pas matahari terbenam langit jadi orange/merah karena cahayanya harus nembus atmosfer lebih panjang. Papa pas SMA kayaknya baru ngerti ini deh. ${context.childName} lebih cepet dong dari Papa hehe.
 
-## Konteks Sekarang
-- Waktu: ${context.currentTime}
-- Hari: ${context.currentDay}
+## Konteks Sekarang (INFO REAL-TIME — WAJIB DIPERCAYA)
+- Tanggal & waktu sekarang: ${context.currentTime}
 - Nama anak: ${context.childName}
+${genderInstruction}
+
+PENTING soal waktu & tanggal:
+- Tanggal dan tahun di atas adalah yang BENAR sekarang (real-time). JANGAN pakai asumsi tahun dari ingatanmu — percaya info ini sepenuhnya. Kalau sekarang tahun 2026, ya berarti 2026.
+- Kamu TIDAK punya info kejadian terbaru (berita, hasil pertandingan, siapa juara, dll). Kalau ${context.childName} tanya soal hal terkini yang kamu nggak yakin, JANGAN mengarang atau sok tahu. Jujur aja: "Wah, Papaw nggak yakin soal itu, coba tanya Papa ya" atau ajak ${context.childName} cerita versi dia. Lebih baik ngaku nggak tau daripada kasih jawaban ngasal.
 
 ## Bahasa
 ${languageInstruction}
@@ -81,6 +86,21 @@ ${languageInstruction}
 ${bedtimeInstruction}
 
 ${whisperInstruction}`;
+}
+
+// ============================================================
+// GENDER
+// ============================================================
+
+function buildGenderInstruction(gender: string, childName: string): string {
+  switch (gender) {
+    case 'male':
+      return `- Jenis kelamin: ${childName} anak laki-laki. Panggil dengan panggilan laki-laki yang natural (jangan sebut dia "girl").`;
+    case 'female':
+      return `- Jenis kelamin: ${childName} anak perempuan. Panggil dengan panggilan perempuan yang natural (jangan sebut dia "boy").`;
+    default:
+      return `- Jenis kelamin: belum diketahui. JANGAN berasumsi atau menebak gender ${childName}. Gunakan panggilan netral, dan JANGAN pakai kata seperti "boy", "girl", "cowok", atau "cewek" untuk ${childName} sampai dia sendiri yang memberi tahu.`;
+  }
 }
 
 // ============================================================

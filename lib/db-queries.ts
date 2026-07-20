@@ -3,11 +3,11 @@
 // ============================================================
 
 import { supabaseServer } from './supabase-server';
-import { 
-  Profile, Session, Message, Badge, Whisper, 
+import {
+  Profile, Session, Message, Badge, Whisper,
   TopicFrequency, Highlight, HighlightType,
   TodaySummary, WeekSummary, CriticalAlert,
-  Language, MissionState
+  Language, Gender, MissionState
 } from '@/types';
 import { generateParentKey } from './parent-key';
 
@@ -15,15 +15,20 @@ import { generateParentKey } from './parent-key';
 // PROFILE
 // ============================================================
 
-export async function createProfile(childName: string, language: Language): Promise<Profile> {
+export async function createProfile(
+  childName: string,
+  language: Language,
+  gender: Gender = 'unspecified'
+): Promise<Profile> {
   const parentKey = generateParentKey();
-  
+
   const { data, error } = await supabaseServer
     .from('profiles')
     .insert({
       child_name: childName,
       papaw_name: 'Papaw',
       default_language: language,
+      child_gender: gender,
       parent_view_key: parentKey,
     })
     .select()
@@ -55,7 +60,7 @@ export async function getProfileByParentKey(key: string): Promise<Profile | null
   return data as Profile;
 }
 
-export async function updateProfile(id: string, updates: Partial<Pick<Profile, 'child_name' | 'papaw_name' | 'default_language'>>): Promise<Profile | null> {
+export async function updateProfile(id: string, updates: Partial<Pick<Profile, 'child_name' | 'papaw_name' | 'default_language' | 'child_gender'>>): Promise<Profile | null> {
   const { data, error } = await supabaseServer
     .from('profiles')
     .update(updates)

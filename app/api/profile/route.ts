@@ -3,7 +3,7 @@
 // ============================================================
 
 import { NextRequest, NextResponse } from 'next/server';
-import { Language, Profile } from '@/types';
+import { Language, Gender, Profile } from '@/types';
 import { createProfile, getProfile, updateProfile } from '@/lib/db-queries';
 import { buildPapaViewUrl } from '@/lib/parent-key';
 
@@ -23,7 +23,7 @@ function sanitizeProfile(profile: Profile): SafeProfile {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { action, childName, language, profileId, updates } = body;
+    const { action, childName, language, gender, profileId, updates } = body;
 
     // Default action is 'create' for backwards compatibility
     const resolvedAction = action || 'create';
@@ -40,7 +40,10 @@ export async function POST(request: NextRequest) {
         const validLanguages: Language[] = ['id', 'en', 'mix'];
         const lang: Language = validLanguages.includes(language) ? language : 'mix';
 
-        const profile = await createProfile(childName, lang);
+        const validGenders: Gender[] = ['male', 'female', 'unspecified'];
+        const gen: Gender = validGenders.includes(gender) ? gender : 'unspecified';
+
+        const profile = await createProfile(childName, lang, gen);
         // The URL (which embeds the key) is returned once here so onboarding
         // can show the parent their Papa View link.
         const papaViewUrl = buildPapaViewUrl(profile.parent_view_key);
