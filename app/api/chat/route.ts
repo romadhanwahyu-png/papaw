@@ -16,7 +16,7 @@ import {
   hasDeliveredWhisperSince,
   markWhisperDelivered,
 } from '@/lib/db-queries';
-import { llm, LLM_FALLBACK_MESSAGE } from '@/lib/llm';
+import { llm, LLM_FALLBACK_MESSAGE, isRateLimitError } from '@/lib/llm';
 import { buildPapawPrompt } from '@/lib/prompts';
 import { runAnalysis } from '@/lib/analyze';
 import { getBedtimeContext, formatTimeForPrompt, getDayName } from '@/lib/time';
@@ -110,7 +110,13 @@ export async function POST(request: NextRequest) {
             controller.enqueue(encoder.encode(delta));
           }
         } catch (streamError) {
-          console.error('[Chat Stream Error]', streamError);
+          if (isRateLimitError(streamError)) {
+            console.error(
+              '[Chat Stream Error] LLM rate/quota limit hit — falling back. Check the API quota/tier (note: each message also triggers a background analyze call).'
+            );
+          } else {
+            console.error('[Chat Stream Error]', streamError);
+          }
         }
 
         // If nothing streamed, emit the fallback so the child always sees text.

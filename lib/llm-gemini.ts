@@ -4,7 +4,7 @@
 
 import { GoogleGenAI } from '@google/genai';
 import { LLMProvider, LLMMessage, AnalysisResult, AnalysisSchema } from '@/types';
-import { LLM_FALLBACK_MESSAGE, normalizeHistory } from './llm';
+import { LLM_FALLBACK_MESSAGE, normalizeHistory, isRateLimitError } from './llm';
 
 const FALLBACK_MESSAGE = LLM_FALLBACK_MESSAGE;
 
@@ -50,6 +50,12 @@ export class GeminiProvider implements LLMProvider {
       return await call();
     } catch (error) {
       console.error('Gemini chat error (attempt 1):', error);
+      // Don't retry quota/rate-limit errors — it just burns another request and
+      // fails again. This is the usual cause of persistent "Papaw lagi mikir".
+      if (isRateLimitError(error)) {
+        console.error('Gemini rate/quota limit hit — skipping retry. Check the API quota/tier.');
+        return FALLBACK_MESSAGE;
+      }
       try {
         await new Promise((resolve) => setTimeout(resolve, 1000));
         return await call();

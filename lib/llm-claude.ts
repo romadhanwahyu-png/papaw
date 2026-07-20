@@ -7,7 +7,7 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import { LLMProvider, LLMMessage, AnalysisResult, AnalysisSchema } from '@/types';
-import { LLM_FALLBACK_MESSAGE, normalizeHistory } from './llm';
+import { LLM_FALLBACK_MESSAGE, normalizeHistory, isRateLimitError } from './llm';
 
 const FALLBACK_MESSAGE = LLM_FALLBACK_MESSAGE;
 const MAX_TOKENS = 1024;
@@ -54,6 +54,10 @@ export class ClaudeProvider implements LLMProvider {
       return await call();
     } catch (error) {
       console.error('Claude chat error (attempt 1):', error);
+      if (isRateLimitError(error)) {
+        console.error('Claude rate/quota limit hit — skipping retry. Check the API quota/tier.');
+        return FALLBACK_MESSAGE;
+      }
       try {
         await new Promise((resolve) => setTimeout(resolve, 1000));
         return await call();

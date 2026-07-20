@@ -35,6 +35,13 @@ export async function runAnalysis(params: AnalyzeParams): Promise<void> {
 
   if (!messageId || !childMessage || !profileId) return;
 
+  // Background analysis doubles LLM requests per message (chat + analyze).
+  // On a constrained free-tier quota this can push a busy session over the
+  // limit, causing chat itself to fall back ("Papaw lagi mikir"). Set
+  // ANALYSIS_ENABLED=false to halve LLM usage (Papa View topics/highlights
+  // won't update while disabled).
+  if (process.env.ANALYSIS_ENABLED === 'false') return;
+
   try {
     const analyzerPrompt = buildAnalyzerPrompt(childMessage, papawResponse);
 
