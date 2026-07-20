@@ -9,6 +9,7 @@ import { getGreeting } from '@/lib/language';
 import { BedtimeBackground } from '@/components/BedtimeBackground';
 import { PapawAvatar } from '@/components/PapawAvatar';
 import { useBedtime } from '@/lib/use-bedtime';
+import { getWibHour } from '@/lib/time';
 
 export default function PapawHubPage() {
   const router = useRouter();
@@ -34,7 +35,7 @@ export default function PapawHubPage() {
       .then((data) => {
         if (data.profile) {
           setProfile(data.profile);
-          const hour = new Date().getHours();
+          const hour = getWibHour();
           setGreeting(
             getGreeting(hour, data.profile.default_language as Language)
           );
@@ -49,7 +50,7 @@ export default function PapawHubPage() {
   }, [router]);
 
   const getTimeEmoji = useCallback(() => {
-    const hour = new Date().getHours();
+    const hour = getWibHour();
     if (hour >= 20 || hour < 6) return '🌙';
     if (hour >= 18) return '🌆';
     if (hour >= 12) return '☀️';

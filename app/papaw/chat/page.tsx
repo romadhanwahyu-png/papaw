@@ -10,6 +10,7 @@ import { PapawAvatar } from '@/components/PapawAvatar';
 import { LoadingDots } from '@/components/LoadingDots';
 import { BedtimeBackground } from '@/components/BedtimeBackground';
 import { useBedtime } from '@/lib/use-bedtime';
+import { getWibHour } from '@/lib/time';
 
 interface DisplayMessage {
   id: string;
@@ -19,7 +20,7 @@ interface DisplayMessage {
 }
 
 function getGreetingMessage(): string {
-  const hour = new Date().getHours();
+  const hour = getWibHour();
   if (hour >= 20 || hour < 6) {
     return 'Hai! 🌙 Udah mau bobo ya? Mau cerita dulu atau Papaw yang cerita?';
   }
