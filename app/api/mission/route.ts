@@ -16,6 +16,7 @@ import {
   getPendingWhispers,
   hasDeliveredWhisperSince,
   markWhisperDelivered,
+  getChildMemory,
 } from '@/lib/db-queries';
 import { llm, LLM_FALLBACK_MESSAGE } from '@/lib/llm';
 import { buildMissionPrompt } from '@/lib/prompts';
@@ -74,6 +75,7 @@ export async function POST(request: NextRequest) {
           papawName: profile.papaw_name,
           language: profile.default_language,
           childGender: profile.child_gender,
+          memoryFacts: await getChildMemory(profileId),
           bedtimeContext: getBedtimeContext(now),
           currentTime: formatTimeForPrompt(now),
           currentDay: getDayName(now),
@@ -166,6 +168,7 @@ export async function POST(request: NextRequest) {
           papawName: profile.papaw_name,
           language: profile.default_language,
           childGender: profile.child_gender,
+          memoryFacts: await getChildMemory(profileId),
           bedtimeContext: getBedtimeContext(now),
           currentTime: formatTimeForPrompt(now),
           currentDay: getDayName(now),
@@ -257,6 +260,7 @@ export async function POST(request: NextRequest) {
           papawName: profile.papaw_name,
           language: profile.default_language,
           childGender: profile.child_gender,
+          memoryFacts: await getChildMemory(profileId),
           bedtimeContext: getBedtimeContext(now),
           currentTime: formatTimeForPrompt(now),
           currentDay: getDayName(now),

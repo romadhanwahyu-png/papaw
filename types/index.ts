@@ -108,6 +108,16 @@ export interface AnalysisResult {
   is_critical: boolean;
   is_highlight: HighlightType | null;
   excerpt: string | null;
+  facts: string[]; // durable facts about the child worth remembering
+}
+
+// --- Child Memory ---
+export interface ChildFact {
+  id: string;
+  profile_id: string;
+  fact: string;
+  category: string;
+  created_at: string;
 }
 
 // ============================================================
@@ -119,6 +129,7 @@ export interface PapawContext {
   papawName: string;
   language: Language;
   childGender: Gender;
+  memoryFacts: string[];
   bedtimeContext: BedtimeContext;
   currentTime: string; // human-readable
   currentDay: string;  // e.g., 'Jumat'

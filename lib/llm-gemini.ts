@@ -95,6 +95,7 @@ Analyze the following conversation content and return a JSON object with these f
 - "is_critical": boolean, true if the conversation touches sensitive topics like war, death, violence, religion, politics, or anything that a parent should know about.
 - "is_highlight": one of "curious_question", "cute_moment", "deep_thinking", or null. Only mark as highlight if the child's message is genuinely notable.
 - "excerpt": string or null, a short excerpt (max 100 chars) of the notable part if is_highlight is not null.
+- "facts": array of strings, NEW durable facts about the CHILD worth remembering long-term (interests, friends, family, school, pets, hobbies, preferences, recurring things). Bahasa Indonesia, singkat (mis. "suka main game bola", "temannya bernama Ozil", "ikut les karate"). JANGAN masukkan fakta yang sudah diketahui, hal sepele/sekali lewat, atau ucapan si companion. Maksimal 3. Kosongkan [] kalau tidak ada yang baru.
 
 Content to analyze:
 ${content}
@@ -117,6 +118,7 @@ Return ONLY the JSON object, no other text.`;
         is_critical: parsed.is_critical || false,
         is_highlight: parsed.is_highlight || null,
         excerpt: parsed.excerpt || null,
+        facts: parsed.facts || [],
       };
     } catch (error) {
       console.error('Gemini analyze error:', error);
@@ -125,6 +127,7 @@ Return ONLY the JSON object, no other text.`;
         is_critical: false,
         is_highlight: null,
         excerpt: null,
+        facts: [],
       };
     }
   }

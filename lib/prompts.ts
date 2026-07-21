@@ -18,6 +18,7 @@ export function buildPapawPrompt(context: PapawContext): string {
   const bedtimeInstruction = buildBedtimeInstruction(context.bedtimeContext);
   const languageInstruction = getLanguageInstruction(context.language);
   const genderInstruction = buildGenderInstruction(context.childGender, context.childName);
+  const memorySection = buildMemorySection(context.childName, context.memoryFacts);
 
   return `# Kamu adalah ${context.papawName}
 
@@ -86,9 +87,23 @@ PENTING soal waktu & tanggal:
 ## Bahasa
 ${languageInstruction}
 
+${memorySection}
+
 ${bedtimeInstruction}
 
 ${whisperInstruction}`;
+}
+
+// ============================================================
+// CHILD MEMORY
+// ============================================================
+
+function buildMemorySection(childName: string, facts: string[]): string {
+  if (!facts || facts.length === 0) return '';
+  const list = facts.map((f) => `- ${f}`).join('\n');
+  return `## Yang Papaw ingat tentang ${childName}
+(Hal-hal yang Papaw udah tahu dari obrolan sebelumnya. Pakai biar terasa kenal dan sambungin obrolan ke minat/hidupnya secara NATURAL. JANGAN dibacain kayak daftar, dan jangan pamer "Papaw inget kok".)
+${list}`;
 }
 
 // ============================================================
@@ -233,9 +248,17 @@ Kasih celebration yang warm tapi proporsional. Bilang dia dapat badge baru!`;
 // ANALYZER PROMPT
 // ============================================================
 
-export function buildAnalyzerPrompt(childMessage: string, papawResponse: string): string {
-  return `Analyze this conversation between a child (8 years old) and their AI bedtime companion.
+export function buildAnalyzerPrompt(
+  childMessage: string,
+  papawResponse: string,
+  knownFacts: string[] = []
+): string {
+  const knownBlock = knownFacts.length > 0
+    ? `\n\nFakta yang SUDAH diketahui tentang anak (JANGAN diulang di "facts"):\n${knownFacts.map((f) => `- ${f}`).join('\n')}`
+    : '';
+
+  return `Analyze this conversation between a child and their AI bedtime companion.
 
 Child's message: "${childMessage}"
-Companion's response: "${papawResponse}"`;
+Companion's response: "${papawResponse}"${knownBlock}`;
 }

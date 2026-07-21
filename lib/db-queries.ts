@@ -7,7 +7,7 @@ import {
   Profile, Session, Message, Badge, Whisper,
   TopicFrequency, Highlight, HighlightType,
   TodaySummary, WeekSummary, CriticalAlert,
-  Language, Gender, MissionState
+  Language, Gender, MissionState, ChildFact
 } from '@/types';
 import { generateParentKey } from './parent-key';
 
@@ -310,6 +310,57 @@ export async function getWhispers(profileId: string): Promise<Whisper[]> {
 
   if (error) return [];
   return (data || []) as Whisper[];
+}
+
+// ============================================================
+// CHILD MEMORY (durable facts Papaw remembers)
+// ============================================================
+
+/** Most recent durable facts about the child, as plain strings. */
+export async function getChildMemory(profileId: string, limit: number = 40): Promise<string[]> {
+  const { data, error } = await supabaseServer
+    .from('child_memory')
+    .select('fact')
+    .eq('profile_id', profileId)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (error) return [];
+  return ((data || []) as { fact: string }[]).map((r) => r.fact);
+}
+
+/** Insert new facts, ignoring exact duplicates (unique on profile_id + fact). */
+export async function addChildFacts(
+  profileId: string,
+  facts: { fact: string; category?: string }[]
+): Promise<void> {
+  const rows = facts
+    .filter((f) => f.fact && f.fact.trim().length > 0)
+    .map((f) => ({
+      profile_id: profileId,
+      fact: f.fact.trim().slice(0, 200),
+      category: f.category || 'other',
+    }));
+
+  if (rows.length === 0) return;
+
+  const { error } = await supabaseServer
+    .from('child_memory')
+    .upsert(rows, { onConflict: 'profile_id,fact', ignoreDuplicates: true });
+
+  if (error) console.error('addChildFacts failed:', error.message);
+}
+
+/** All facts (for Papa View / debugging). */
+export async function getChildFacts(profileId: string): Promise<ChildFact[]> {
+  const { data, error } = await supabaseServer
+    .from('child_memory')
+    .select('*')
+    .eq('profile_id', profileId)
+    .order('created_at', { ascending: false });
+
+  if (error) return [];
+  return (data || []) as ChildFact[];
 }
 
 // ============================================================

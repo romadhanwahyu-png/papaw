@@ -15,6 +15,7 @@ import {
   getPendingWhispers,
   hasDeliveredWhisperSince,
   markWhisperDelivered,
+  getChildMemory,
 } from '@/lib/db-queries';
 import { llm, LLM_FALLBACK_MESSAGE, isRateLimitError } from '@/lib/llm';
 import { buildPapawPrompt } from '@/lib/prompts';
@@ -80,12 +81,14 @@ export async function POST(request: NextRequest) {
     }
 
     // 5. Build PapawContext
+    const memoryFacts = await getChildMemory(profileId);
     const now = new Date();
     const context: PapawContext = {
       childName: profile.child_name,
       papawName: profile.papaw_name,
       language: profile.default_language,
       childGender: profile.child_gender,
+      memoryFacts,
       bedtimeContext: getBedtimeContext(now),
       currentTime: formatTimeForPrompt(now),
       currentDay: getDayName(now),

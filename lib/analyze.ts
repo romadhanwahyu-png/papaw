@@ -14,6 +14,8 @@ import {
   updateMessageTags,
   updateTopicFrequency,
   saveHighlight,
+  getChildMemory,
+  addChildFacts,
 } from './db-queries';
 
 export interface AnalyzeParams {
@@ -24,7 +26,7 @@ export interface AnalyzeParams {
 }
 
 const ANALYZER_SCHEMA_DESCRIPTION =
-  "Analyze the child's message for topic tags, critical topics, and highlight-worthy moments. Return JSON with: topic_tags (string[]), is_critical (boolean), is_highlight (\"curious_question\" | \"cute_moment\" | \"deep_thinking\" | null), excerpt (string | null — a short quote if highlight-worthy).";
+  "Analyze the child's message for topic tags, critical topics, highlight-worthy moments, and durable facts to remember. Return JSON with: topic_tags (string[]), is_critical (boolean), is_highlight (\"curious_question\" | \"cute_moment\" | \"deep_thinking\" | null), excerpt (string | null — a short quote if highlight-worthy), facts (string[] — new durable facts about the child).";
 
 /**
  * Analyze one exchange and persist the results. Never throws — analysis is
@@ -43,7 +45,10 @@ export async function runAnalysis(params: AnalyzeParams): Promise<void> {
   if (process.env.ANALYSIS_ENABLED === 'false') return;
 
   try {
-    const analyzerPrompt = buildAnalyzerPrompt(childMessage, papawResponse);
+    // Pass known facts so the extractor only returns NEW ones (piggybacks the
+    // existing analyze call — no extra LLM request).
+    const knownFacts = await getChildMemory(profileId);
+    const analyzerPrompt = buildAnalyzerPrompt(childMessage, papawResponse, knownFacts);
 
     const result = await llm.analyze(analyzerPrompt, {
       description: ANALYZER_SCHEMA_DESCRIPTION,
@@ -57,6 +62,10 @@ export async function runAnalysis(params: AnalyzeParams): Promise<void> {
 
     if (result.is_highlight && result.excerpt) {
       await saveHighlight(profileId, messageId, result.is_highlight, result.excerpt);
+    }
+
+    if (result.facts && result.facts.length > 0) {
+      await addChildFacts(profileId, result.facts.map((f) => ({ fact: f })));
     }
   } catch (error) {
     console.error('[Analyze Error]', error);

@@ -94,6 +94,7 @@ Analyze the following conversation content and return a JSON object with these f
 - "is_critical": boolean, true for sensitive topics (war, death, violence, religion, politics) a parent should know about.
 - "is_highlight": one of "curious_question", "cute_moment", "deep_thinking", or null.
 - "excerpt": string or null, short excerpt (max 100 chars) if is_highlight is not null.
+- "facts": array of strings (max 3), NEW durable facts about the CHILD worth remembering (interests, friends, family, school, pets, hobbies, preferences). Bahasa Indonesia, singkat. Skip already-known facts, trivia, and the companion's own words. [] if none.
 
 Content to analyze:
 ${content}
@@ -119,6 +120,7 @@ Return ONLY the JSON object, no other text.`;
         is_critical: parsed.is_critical || false,
         is_highlight: parsed.is_highlight || null,
         excerpt: parsed.excerpt || null,
+        facts: parsed.facts || [],
       };
     } catch (error) {
       console.error('Claude analyze error:', error);
@@ -127,6 +129,7 @@ Return ONLY the JSON object, no other text.`;
         is_critical: false,
         is_highlight: null,
         excerpt: null,
+        facts: [],
       };
     }
   }
