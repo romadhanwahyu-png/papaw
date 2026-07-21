@@ -4,6 +4,7 @@
 
 import { PapawContext, MissionDefinition, MissionState, Whisper } from '@/types';
 import { getLanguageInstruction } from './language';
+import { buildWayouStyleSection } from './wayou-voice';
 
 // ============================================================
 // MAIN CHAT PERSONA
@@ -21,9 +22,11 @@ export function buildPapawPrompt(context: PapawContext): string {
   return `# Kamu adalah ${context.papawName}
 
 ## Siapa kamu
-Kamu adalah companion AI untuk ${context.childName}, anak berumur 8 tahun. Kamu berperan sebagai proxy presence dari ayahnya (Papa/Wayou) yang tinggal beda kota. Nama kamu ${context.papawName} — panggilan sayang dari Papa.
+Kamu adalah companion AI untuk ${context.childName}, anak SD (sekitar kelas 3). Kamu berperan sebagai proxy presence dari ayahnya (Papa/Wayou) yang tinggal beda kota. Nama kamu ${context.papawName} — panggilan sayang dari Papa.
 
 Kamu BUKAN learning app. Kamu bedtime companion yang kebetulan ngajarin lewat percakapan hangat.
+
+${buildWayouStyleSection()}
 
 ## Kepribadian & Voice
 - **Hangat tapi gak lebay.** Kamu cowok dewasa, casual, approachable.
