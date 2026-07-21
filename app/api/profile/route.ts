@@ -4,26 +4,41 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { Language, Gender, Profile } from '@/types';
-import { createProfile, getProfile, updateProfile } from '@/lib/db-queries';
+import {
+  createProfile,
+  getProfile,
+  updateProfile,
+  getProfileByUsername,
+  isUsernameTaken,
+  setProfileCredentials,
+} from '@/lib/db-queries';
 import { buildPapaViewUrl } from '@/lib/parent-key';
+import {
+  hashPin,
+  verifyPin,
+  normalizeUsername,
+  isValidUsername,
+  isValidPin,
+} from '@/lib/auth';
 
 /**
- * Strip the parent_view_key before returning a profile to the client.
- * The key is the sole secret gating Papa View — it must never travel in a
- * general profile response. It is revealed only via the explicit `share-url`
- * action (and embedded in the one-time `papaViewUrl` at creation).
+ * Strip server-only secrets before returning a profile to the client:
+ * - parent_view_key: the sole secret gating Papa View (revealed only via the
+ *   explicit `share-url` action / one-time `papaViewUrl` at creation).
+ * - pin_hash: the login secret.
  */
-type SafeProfile = Omit<Profile, 'parent_view_key'>;
+type SafeProfile = Omit<Profile, 'parent_view_key' | 'pin_hash'>;
 function sanitizeProfile(profile: Profile): SafeProfile {
-  const { parent_view_key: _omit, ...safe } = profile;
-  void _omit;
+  const { parent_view_key: _k, pin_hash: _p, ...safe } = profile;
+  void _k;
+  void _p;
   return safe;
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { action, childName, language, gender, profileId, updates } = body;
+    const { action, childName, language, gender, profileId, updates, username, pin } = body;
 
     // Default action is 'create' for backwards compatibility
     const resolvedAction = action || 'create';
@@ -94,6 +109,69 @@ export async function POST(request: NextRequest) {
           success: true,
           papaViewUrl: buildPapaViewUrl(profile.parent_view_key),
         });
+      }
+
+      case 'login': {
+        if (!username || !pin) {
+          return NextResponse.json(
+            { error: 'username and pin are required' },
+            { status: 400 }
+          );
+        }
+
+        const profile = await getProfileByUsername(normalizeUsername(username));
+        // Same generic message whether the username or the PIN is wrong.
+        if (!profile || !verifyPin(String(pin), profile.pin_hash)) {
+          return NextResponse.json(
+            { error: 'Username atau PIN salah' },
+            { status: 401 }
+          );
+        }
+
+        return NextResponse.json({
+          success: true,
+          profileId: profile.id,
+          profile: sanitizeProfile(profile),
+        });
+      }
+
+      case 'set-credentials': {
+        if (!profileId || !username || !pin) {
+          return NextResponse.json(
+            { error: 'profileId, username, and pin are required' },
+            { status: 400 }
+          );
+        }
+
+        const uname = normalizeUsername(username);
+        if (!isValidUsername(uname)) {
+          return NextResponse.json(
+            { error: 'Username harus 3–20 huruf/angka (tanpa spasi)' },
+            { status: 400 }
+          );
+        }
+        if (!isValidPin(String(pin))) {
+          return NextResponse.json(
+            { error: 'PIN harus 4–6 angka' },
+            { status: 400 }
+          );
+        }
+        if (await isUsernameTaken(uname, profileId)) {
+          return NextResponse.json(
+            { error: 'Username sudah dipakai, coba yang lain' },
+            { status: 409 }
+          );
+        }
+
+        const profile = await setProfileCredentials(profileId, uname, hashPin(String(pin)));
+        if (!profile) {
+          return NextResponse.json(
+            { error: 'Gagal menyimpan login' },
+            { status: 500 }
+          );
+        }
+
+        return NextResponse.json({ success: true, profile: sanitizeProfile(profile) });
       }
 
       case 'update': {

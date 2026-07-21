@@ -21,6 +21,11 @@ export default function SettingsPage() {
   const bedtimeMode = useBedtime();
   const [message, setMessage] = useState('');
   const [papaViewUrl, setPapaViewUrl] = useState('');
+  const [username, setUsername] = useState('');
+  const [pin, setPin] = useState('');
+  const [hasCredentials, setHasCredentials] = useState(false);
+  const [credMessage, setCredMessage] = useState('');
+  const [savingCred, setSavingCred] = useState(false);
 
   // Load Profile
   useEffect(() => {
@@ -42,6 +47,8 @@ export default function SettingsPage() {
           setChildName(data.profile.child_name);
           setLanguage(data.profile.default_language);
           setGender(data.profile.child_gender || 'unspecified');
+          setUsername(data.profile.username || '');
+          setHasCredentials(!!data.profile.username);
         } else {
           router.replace('/onboarding');
         }
@@ -119,6 +126,45 @@ export default function SettingsPage() {
       setSaving(false);
     }
   }, [childName, language, gender, saving]);
+
+  // Save login credentials (username + PIN)
+  const handleSaveCredentials = useCallback(async () => {
+    const profileId = getProfileId();
+    if (!profileId || savingCred) return;
+
+    const u = username.trim().toLowerCase();
+    if (!/^[a-z0-9_]{3,20}$/.test(u)) {
+      setCredMessage('Username 3–20 huruf/angka (tanpa spasi) ya');
+      return;
+    }
+    if (!/^\d{4,6}$/.test(pin)) {
+      setCredMessage('PIN harus 4–6 angka');
+      return;
+    }
+
+    setSavingCred(true);
+    setCredMessage('');
+    try {
+      const res = await fetch('/api/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'set-credentials', profileId, username: u, pin }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setCredMessage(data.error || 'Gagal menyimpan login');
+        return;
+      }
+      setUsername(u);
+      setPin('');
+      setHasCredentials(true);
+      setCredMessage('Login tersimpan! Sekarang bisa masuk dari HP/tablet lain. ✨');
+    } catch {
+      setCredMessage('Gagal menyimpan, coba lagi ya!');
+    } finally {
+      setSavingCred(false);
+    }
+  }, [username, pin, savingCred]);
 
   if (loading) {
     return (
@@ -205,6 +251,55 @@ export default function SettingsPage() {
             </label>
             <div>
               <LanguageToggle value={language} onChange={setLanguage} />
+            </div>
+          </div>
+
+          {/* Login (username + PIN) Card */}
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-amber-200/50 uppercase tracking-wider block">
+              Login (biar bisa dipakai di HP/tablet lain)
+            </label>
+            <div className="bg-white/3 border border-white/5 rounded-2xl p-4 space-y-3">
+              <p className="text-xs text-amber-200/60 leading-relaxed">
+                {hasCredentials
+                  ? 'Sudah ada login. Mau ganti username atau PIN? Isi lagi di bawah.'
+                  : 'Bikin username + PIN sekali aja. Nanti kalau ganti HP atau kehapus, tinggal login pakai ini — data Papaw balik lagi.'}
+              </p>
+              <input
+                type="text"
+                value={username}
+                onChange={(e) => {
+                  setUsername(e.target.value);
+                  setCredMessage('');
+                }}
+                placeholder="Username (mis. mayka)"
+                autoCapitalize="none"
+                autoCorrect="off"
+                className="w-full px-4 py-3 rounded-xl bg-black/20 border border-white/5 text-amber-50 text-sm placeholder:text-amber-100/20 focus:border-amber-400/30 transition-all outline-none"
+                maxLength={20}
+              />
+              <input
+                type="password"
+                inputMode="numeric"
+                value={pin}
+                onChange={(e) => {
+                  setPin(e.target.value.replace(/\D/g, ''));
+                  setCredMessage('');
+                }}
+                placeholder="PIN baru (4–6 angka)"
+                className="w-full px-4 py-3 rounded-xl bg-black/20 border border-white/5 text-amber-50 text-sm tracking-widest placeholder:tracking-normal placeholder:text-amber-100/20 focus:border-amber-400/30 transition-all outline-none"
+                maxLength={6}
+              />
+              {credMessage && (
+                <p className="text-xs text-warm-amber">{credMessage}</p>
+              )}
+              <button
+                onClick={handleSaveCredentials}
+                disabled={savingCred}
+                className="w-full py-3 rounded-xl bg-white/10 text-amber-100 text-sm font-semibold hover:bg-white/15 active:scale-[0.98] disabled:opacity-50 transition-all"
+              >
+                {savingCred ? 'Menyimpan…' : hasCredentials ? 'Ganti Login' : 'Simpan Login'}
+              </button>
             </div>
           </div>
 

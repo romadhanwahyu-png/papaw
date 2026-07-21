@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Language, Gender } from '@/types';
 import { setProfileId, setLanguagePref } from '@/lib/storage';
 import { languageNames } from '@/lib/language';
@@ -125,6 +126,13 @@ export default function OnboardingPage() {
                 >
                   Lanjut →
                 </button>
+
+                <Link
+                  href="/login"
+                  className="block text-center text-text-muted hover:text-text-secondary transition-colors text-sm pt-1"
+                >
+                  Sudah pernah pakai Papaw? Masuk
+                </Link>
               </div>
             </div>
           )}

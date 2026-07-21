@@ -60,6 +60,45 @@ export async function getProfileByParentKey(key: string): Promise<Profile | null
   return data as Profile;
 }
 
+export async function getProfileByUsername(username: string): Promise<Profile | null> {
+  const { data, error } = await supabaseServer
+    .from('profiles')
+    .select('*')
+    .eq('username', username)
+    .single();
+
+  if (error) return null;
+  return data as Profile;
+}
+
+/** Is this username already used by a different profile? */
+export async function isUsernameTaken(username: string, excludeProfileId?: string): Promise<boolean> {
+  const { data } = await supabaseServer
+    .from('profiles')
+    .select('id')
+    .eq('username', username);
+
+  const rows = (data || []) as { id: string }[];
+  if (rows.length === 0) return false;
+  return excludeProfileId ? rows.some((r) => r.id !== excludeProfileId) : true;
+}
+
+export async function setProfileCredentials(
+  profileId: string,
+  username: string,
+  pinHash: string
+): Promise<Profile | null> {
+  const { data, error } = await supabaseServer
+    .from('profiles')
+    .update({ username, pin_hash: pinHash })
+    .eq('id', profileId)
+    .select()
+    .single();
+
+  if (error) return null;
+  return data as Profile;
+}
+
 export async function updateProfile(id: string, updates: Partial<Pick<Profile, 'child_name' | 'papaw_name' | 'default_language' | 'child_gender'>>): Promise<Profile | null> {
   const { data, error } = await supabaseServer
     .from('profiles')

@@ -10,6 +10,8 @@ export interface Profile {
   default_language: Language;
   child_gender: Gender;
   parent_view_key: string;
+  username: string | null;
+  pin_hash: string | null; // "salt:hash" — server-only, never sent to client
   created_at: string;
 }
 
